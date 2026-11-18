@@ -1,0 +1,69 @@
+# Development stack with hot reload (no TLS, no Caddy):
+#   docker compose -f docker-compose.dev.yml up --build
+# Storefront http://localhost:3000 · Admin http://localhost:3001/admin · API http://localhost:4000/api/docs
+# Mailpit (SMTP host "mailpit", port 1025) http://localhost:8025
+name: shopkit-dev
+
+x-src: &src
+  - ./apps/api/src:/repo/apps/api/src
+  - ./apps/worker/src:/repo/apps/worker/src
+  - ./apps/admin/src:/repo/apps/admin/src
+  - ./apps/storefront/src:/repo/apps/storefront/src
+  - ./packages/core/src:/repo/packages/core/src
+  - ./packages/crypto/src:/repo/packages/crypto/src
+  - ./packages/db/src:/repo/packages/db/src
+  - ./packages/db/migrations:/repo/packages/db/migrations
+  - ./packages/providers/src:/repo/packages/providers/src
+  - ./packages/sdk/src:/repo/packages/sdk/src
+  - ./packages/ui/src:/repo/packages/ui/src
+  - dev-data:/data
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment: { POSTGRES_USER: shopkit, POSTGRES_PASSWORD: shopkit, POSTGRES_DB: shopkit }
+    ports: ["5432:5432"]
+    volumes: [dev-postgres:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U shopkit"], interval: 5s, timeout: 3s, retries: 20 }
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 3s, retries: 20 }
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports: ["8025:8025", "1025:1025"]
+
+  minio:
+    image: rustfs/rustfs:1.0.5
+    profiles: ["minio", "s3"]
+    environment: { RUSTFS_ACCESS_KEY: shopkit, RUSTFS_SECRET_KEY: shopkit-dev-secret }
+    ports: ["9000:9000"]
+
+  dev:
+    build: { context: ., dockerfile: docker/dev.Dockerfile }
+    command: ["sh", "-c", "pnpm shopkit db:migrate && pnpm turbo run dev --concurrency=20"]
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://shopkit:shopkit@postgres:5432/shopkit
+      REDIS_URL: redis://redis:6379
+      PUBLIC_URL: http://localhost:3000
+      API_INTERNAL_URL: http://localhost:4000
+      STOREFRONT_INTERNAL_URL: http://localhost:3000
+      SESSION_SECRET: dev-session-secret-that-is-at-least-32-chars
+      REVALIDATE_SECRET: dev-revalidate-secret
+      SHOPKIT_MASTER_KEY: ZGV2LW9ubHktbWFzdGVyLWtleS0zMi1ieXRlcyEhISE=
+      SHOPKIT_DATA_DIR: /data
+      TRUST_PROXY: "false"
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    ports: ["3000:3000", "3001:3001", "4000:4000"]
+    volumes: *src
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+volumes:
+  dev-postgres:
+  dev-data:

@@ -35,10 +35,7 @@
     "onlyBuiltDependencies": [
       "argon2",
       "esbuild",
-      "sharp",
-      "cpu-features",
-      "ssh2",
-      "protobufjs"
+      "sharp"
     ],
     "peerDependencyRules": {
       "allowedVersions": {

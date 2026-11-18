@@ -1,0 +1,29 @@
+{
+	email {$ACME_EMAIL:admin@example.com}
+}
+
+{$SITE_ADDRESS:localhost} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	# Worker-only endpoint on the storefront; never public.
+	handle /internal/* {
+		respond 404
+	}
+	handle /api/* {
+		reverse_proxy api:4000
+	}
+	handle /media/* {
+		reverse_proxy api:4000
+	}
+	handle /admin* {
+		reverse_proxy admin:3001
+	}
+	handle {
+		reverse_proxy storefront:3000
+	}
+}

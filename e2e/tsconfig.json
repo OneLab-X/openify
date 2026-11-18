@@ -1,0 +1,5 @@
+{
+  "extends": "@shopkit/config/tsconfig.node.json",
+  "compilerOptions": { "noEmit": true, "rootDir": ".", "lib": ["ES2023", "DOM"] },
+  "include": ["tests", "fixtures", "playwright.config.ts"]
+}
