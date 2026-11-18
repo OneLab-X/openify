@@ -27,6 +27,8 @@ export default tseslint.config(
       "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/no-misused-promises": ["error", { checksVoidReturn: { attributes: false } }],
       "no-console": ["error", { allow: ["warn", "error"] }],
+      // Fastify plugins and interface implementations are async by contract even without await.
+      "@typescript-eslint/require-await": "off",
     },
   },
   {

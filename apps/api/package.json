@@ -1,0 +1,42 @@
+{
+  "name": "@shopkit/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx watch --clear-screen=false src/server.ts",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "cli": "tsx src/cli.ts",
+    "openapi:emit": "tsx src/openapi.ts ../../packages/sdk/openapi.json"
+  },
+  "dependencies": {
+    "@fastify/cookie": "11.1.5",
+    "@fastify/multipart": "10.1.9",
+    "@fastify/rate-limit": "11.2.2",
+    "@fastify/swagger": "9.9.5",
+    "@fastify/swagger-ui": "6.1.4",
+    "@shopkit/core": "workspace:*",
+    "@shopkit/crypto": "workspace:*",
+    "@shopkit/db": "workspace:*",
+    "@shopkit/providers": "workspace:*",
+    "fastify": "5.12.8",
+    "fastify-type-provider-zod": "7.0.0",
+    "ioredis": "6.0.0",
+    "pino": "10.4.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@shopkit/config": "workspace:*",
+    "@testcontainers/postgresql": "12.2.1",
+    "@testcontainers/redis": "12.2.1",
+    "@types/node": "22.20.5",
+    "testcontainers": "12.2.1",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "vitest": "5.1.1"
+  }
+}
