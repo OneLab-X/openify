@@ -1,0 +1,8 @@
+pnpm-lock.yaml
+dist
+.next
+coverage
+packages/db/migrations/meta
+packages/sdk/src/schema.d.ts
+packages/sdk/openapi.json
+docs/prompts
