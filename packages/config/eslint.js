@@ -30,6 +30,15 @@ export default tseslint.config(
     },
   },
   {
+    // expect.any()/expect.stringMatching() are typed `any`; that is fine in assertions.
+    files: ["**/*.test.ts", "**/test/**/*.ts", "e2e/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/no-non-null-assertion": "off",
+    },
+  },
+  {
     files: ["**/*.js", "**/*.mjs", "**/*.cjs"],
     ...tseslint.configs.disableTypeChecked,
   },
