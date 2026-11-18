@@ -1,0 +1,37 @@
+{
+  "name": "@shopkit/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@shopkit/crypto": "workspace:*",
+    "@shopkit/db": "workspace:*",
+    "@shopkit/providers": "workspace:*",
+    "@zxcvbn-ts/core": "4.3.0",
+    "@zxcvbn-ts/language-common": "4.2.0",
+    "@zxcvbn-ts/language-en": "4.1.2",
+    "argon2": "0.45.2",
+    "ioredis": "6.0.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@shopkit/config": "workspace:*",
+    "@testcontainers/postgresql": "12.2.1",
+    "@testcontainers/redis": "12.2.1",
+    "@types/node": "22.20.5",
+    "testcontainers": "12.2.1",
+    "typescript": "6.0.3",
+    "vitest": "5.1.1"
+  }
+}
