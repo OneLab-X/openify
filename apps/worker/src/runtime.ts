@@ -72,6 +72,18 @@ export function createRuntime(config: WorkerConfig, logger: Logger, env: Record<
       logger.info({ jobId: job.id, status: result.status, reason: result.reason }, "email job");
       return result;
     },
+    revalidate: async (job) => {
+      const { tags } = job.data as { tags: string[] };
+      if (!config.STOREFRONT_INTERNAL_URL || !config.REVALIDATE_SECRET) return { status: "skipped", reason: "storefront revalidation not configured" };
+      const res = await fetch(`${config.STOREFRONT_INTERNAL_URL}/internal/revalidate`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-revalidate-secret": config.REVALIDATE_SECRET },
+        body: JSON.stringify({ tags }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!res.ok) throw new Error(`storefront revalidate failed (${res.status})`);
+      return { status: "revalidated", tags };
+    },
     // Phase 2 re-encodes and resizes with sharp; Phase 1 only acknowledges the job.
     images: async (job) => {
       logger.info({ jobId: job.id, mediaId: (job.data as { mediaId?: string }).mediaId }, "image job (stub)");

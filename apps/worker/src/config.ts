@@ -10,6 +10,8 @@ const envSchema = z.object({
   HEALTH_PORT: z.coerce.number().int().default(4100),
   OUTBOX_INTERVAL_MS: z.coerce.number().int().min(100).default(1000),
   WORKER_CONCURRENCY: z.coerce.number().int().min(1).default(5),
+  STOREFRONT_INTERNAL_URL: z.url().optional(),
+  REVALIDATE_SECRET: z.string().min(16).optional(),
 });
 export type WorkerConfig = z.infer<typeof envSchema>;
 

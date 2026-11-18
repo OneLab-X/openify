@@ -109,7 +109,7 @@ describe("setup wizard", () => {
         }
       }
     });
-    expect(routed.sort()).toEqual(["email:store-launched", "images:process"]);
+    expect(routed.sort()).toEqual(["email:store-launched", "images:process", "revalidate:tags", "revalidate:tags"]);
     expect(sentEmails.at(-1)).toMatchObject({ to: "asha@pls.test", subject: "Pretty Little Store is live" });
     expect(await deps.db.$count(outboxEvents)).toBe(2);
 

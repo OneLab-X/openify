@@ -14,6 +14,13 @@ export interface RoutedJob {
   jobId: string;
 }
 
+const revalidate = (event: OutboxEvent, tags: string[]): RoutedJob => ({
+  queue: "revalidate",
+  name: "tags",
+  data: { storeId: event.storeId, tags },
+  jobId: `${event.id}-revalidate`,
+});
+
 /** Fans an outbox event out to queue jobs (SPEC §13). Unknown events route nowhere. */
 export async function routeOutboxEvent(deps: CoreDeps, event: OutboxEvent): Promise<RoutedJob[]> {
   switch (event.type) {
@@ -31,10 +38,18 @@ export async function routeOutboxEvent(deps: CoreDeps, event: OutboxEvent): Prom
         data: { ownerName: owner.name, adminUrl: `${deps.runtime.publicUrl}/admin`, shopUrl: deps.runtime.publicUrl },
         idempotencyKey: `${event.id}:store-launched`,
       };
-      return [{ queue: "email", name: "store-launched", data: { ...job }, jobId: `${event.id}-email` }];
+      return [
+        { queue: "email", name: "store-launched", data: { ...job }, jobId: `${event.id}-email` },
+        revalidate(event, ["store"]),
+      ];
     }
+    case "store.updated":
+      return [revalidate(event, ["store"])];
     case "media.created":
-      return [{ queue: "images", name: "process", data: { storeId: event.storeId, ...event.payload }, jobId: `${event.id}-images` }];
+      return [
+        { queue: "images", name: "process", data: { storeId: event.storeId, ...event.payload }, jobId: `${event.id}-images` },
+        revalidate(event, ["store"]),
+      ];
     case "email.requested":
       return [{ queue: "email", name: "requested", data: { ...event.payload }, jobId: `${event.id}-email` }];
     default:

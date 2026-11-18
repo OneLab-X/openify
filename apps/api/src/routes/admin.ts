@@ -1,6 +1,7 @@
 import {
   AppError,
   deleteCredential,
+  enqueueEvent,
   getSetting,
   getStore,
   listAudit,
@@ -82,6 +83,7 @@ export const adminRoutes: FastifyPluginAsyncZod<{ deps: AppDeps }> = async (app,
       const storeId = req.staff!.storeId;
       await deps.db.transaction(async (tx) => {
         await updateStoreDetails(tx, storeId, req.body);
+        await enqueueEvent(tx, { storeId, type: "store.updated" });
         await writeAudit(tx, actorOf(req), { storeId, action: "store.details_updated", resourceType: "store", resourceId: storeId });
       });
       return storeView(deps, await getStore(deps.db, storeId));
