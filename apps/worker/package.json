@@ -1,0 +1,34 @@
+{
+  "name": "@shopkit/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx watch --clear-screen=false src/main.ts",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@shopkit/core": "workspace:*",
+    "@shopkit/crypto": "workspace:*",
+    "@shopkit/db": "workspace:*",
+    "@shopkit/providers": "workspace:*",
+    "bullmq": "6.7.7",
+    "ioredis": "6.0.0",
+    "pino": "10.4.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@shopkit/config": "workspace:*",
+    "@testcontainers/postgresql": "12.2.1",
+    "@testcontainers/redis": "12.2.1",
+    "@types/node": "22.20.5",
+    "testcontainers": "12.2.1",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "vitest": "5.1.1"
+  }
+}
