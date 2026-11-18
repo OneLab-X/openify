@@ -50,7 +50,7 @@ export function Field({
     <div className={cn("grid gap-1.5", className)}>
       <Label htmlFor={id}>
         {label}
-        {required ? <span className="text-destructive"> *</span> : null}
+        {required ? <span aria-hidden className="text-destructive"> *</span> : null}
       </Label>
       {children}
       {description ? (

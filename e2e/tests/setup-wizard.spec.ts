@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { LOGO_PNG } from "../fixtures/logo.js";
 import { psql, setupToken } from "../fixtures/stack.js";
 
@@ -11,9 +11,17 @@ test.describe.configure({ mode: "serial" });
 const OWNER = { name: "Asha Kumar", email: "asha@shopkit.test", password: "violet-Trombone-47-sunrise" };
 const RZP_SECRET = "E2E_PLAINTEXT_SECRET_7731";
 
+async function signIn(page: Page) {
+  await page.goto("/admin/login");
+  await page.getByLabel("Email").fill(OWNER.email);
+  await page.getByRole("textbox", { name: "Password", exact: true }).fill(OWNER.password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("heading", { name: "Welcome, Asha", exact: true })).toBeVisible();
+}
+
 test("storefront shows coming soon and setup endpoints need the token", async ({ page, request }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Coming soon" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Coming soon", exact: true })).toBeVisible();
 
   expect((await request.get("/api/setup/status")).ok()).toBe(true);
   expect((await request.get("/api/setup/state")).status()).toBe(401);
@@ -34,19 +42,19 @@ test("admin redirects to the setup wizard and completes every step", async ({ pa
   await page.getByRole("button", { name: "Continue" }).click();
 
   // Step 1: owner (weak password rejected first)
-  await expect(page.getByRole("heading", { name: "Create the owner account" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Create the owner account", exact: true })).toBeVisible();
   await page.getByLabel("Your name").fill(OWNER.name);
   await page.getByLabel("Email").fill(OWNER.email);
-  await page.getByLabel("Password", { exact: true }).fill("password123");
+  await page.getByRole("textbox", { name: "Password", exact: true }).fill("password123");
   await page.getByLabel("Confirm password").fill("password123");
   await page.getByRole("button", { name: "Save and continue" }).click();
   await expect(page.getByText(/Password is too weak/)).toBeVisible();
-  await page.getByLabel("Password", { exact: true }).fill(OWNER.password);
+  await page.getByRole("textbox", { name: "Password", exact: true }).fill(OWNER.password);
   await page.getByLabel("Confirm password").fill(OWNER.password);
   await page.getByRole("button", { name: "Save and continue" }).click();
 
   // Step 2: storage — a failed and a successful Test connection
-  await expect(page.getByRole("heading", { name: "Where should files be stored?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Where should files be stored?", exact: true })).toBeVisible();
   await page.getByRole("radio", { name: "MinIO / S3-compatible" }).check();
   await page.getByLabel("Endpoint").fill("http://nowhere.invalid:9000");
   await page.getByLabel("Bucket").fill("shop");
@@ -61,7 +69,7 @@ test("admin redirects to the setup wizard and completes every step", async ({ pa
   await page.getByRole("button", { name: /Test & save/ }).click();
 
   // Step 3: store details + logo
-  await expect(page.getByRole("heading", { name: "Store details" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Store details", exact: true })).toBeVisible();
   await page.getByLabel("Logo").setInputFiles({ name: "logo.png", mimeType: "image/png", buffer: LOGO_PNG });
   await expect(page.getByRole("img", { name: "Current logo" })).toBeVisible();
   await page.getByLabel("Store name").fill("Pretty Little Store");
@@ -71,7 +79,7 @@ test("admin redirects to the setup wizard and completes every step", async ({ pa
   await page.getByRole("button", { name: "Save and continue" }).click();
 
   // Step 4: payments — save Razorpay (secret must never be echoed) and COD
-  await expect(page.getByRole("heading", { name: "Payments" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Payments", exact: true })).toBeVisible();
   await page.getByRole("radio", { name: "Razorpay" }).check();
   await page.getByLabel("Key ID").fill("rzp_test_e2eKey123");
   await page.getByLabel("Key secret").fill(RZP_SECRET);
@@ -86,20 +94,21 @@ test("admin redirects to the setup wizard and completes every step", async ({ pa
   await page.getByRole("button", { name: "Continue" }).click();
 
   // Steps 5–7: optional, skipped
-  await expect(page.getByRole("heading", { name: "Email" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Email", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Skip for now" }).click();
-  await expect(page.getByRole("heading", { name: "Analytics" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Analytics", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Skip for now" }).click();
-  await expect(page.getByRole("heading", { name: "Shipping & tax" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Shipping & tax", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Skip for now" }).click();
 
   // Step 8: review & launch
-  await expect(page.getByRole("heading", { name: "Review & launch" })).toBeVisible();
-  await expect(page.getByText("razorpay (test), cod (live)")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review & launch", exact: true })).toBeVisible();
+  await expect(page.getByText(/razorpay \(test\)/)).toBeVisible();
+  await expect(page.getByText(/cod \(live\)/)).toBeVisible();
   await page.getByRole("button", { name: "Launch store" }).click();
 
   // Admin shell loads, signed in as the owner
-  await expect(page.getByRole("heading", { name: "Welcome, Asha" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Welcome, Asha", exact: true })).toBeVisible();
   for (const item of ["Home", "Orders", "Products", "Customers", "Content", "Analytics", "Settings"]) {
     await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: item })).toBeVisible();
   }
@@ -108,7 +117,7 @@ test("admin redirects to the setup wizard and completes every step", async ({ pa
 test("storefront shows the store name and logo", async ({ page }) => {
   await expect(async () => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Pretty Little Store" })).toBeVisible({ timeout: 2_000 });
+    await expect(page.getByRole("heading", { name: "Pretty Little Store", exact: true })).toBeVisible({ timeout: 2_000 });
   }).toPass({ timeout: 30_000 });
   const logo = page.getByRole("img", { name: "Pretty Little Store logo" });
   await expect(logo).toBeVisible();
@@ -121,14 +130,17 @@ test("secrets are encrypted at rest and never returned by the API", async ({ pag
   expect(dump).not.toContain(RZP_SECRET);
   expect(psql("select count(*) from provider_credentials where kind = 'payment'").trim()).toBe("2");
 
+  await signIn(page);
   await page.goto("/admin/settings/payments");
   const res = await page.request.get("/api/admin/credentials");
   expect(res.ok()).toBe(true);
   const body = await res.text();
   expect(body).toContain('"last4":"7731"');
   expect(body).not.toContain(RZP_SECRET);
-  await expect(page.getByRole("radio", { name: "Razorpay" })).toBeChecked();
+  await page.getByRole("radio", { name: "Razorpay" }).check();
+  await expect(page.getByLabel("Key ID")).toHaveValue("rzp_test_e2eKey123");
   await expect(page.getByLabel("Key secret")).toHaveValue("");
+  await expect(page.getByLabel("Key secret")).toHaveAttribute("placeholder", /Saved ••••7731/);
 });
 
 test("setup endpoints reject requests after setup completes", async ({ request }) => {
@@ -140,11 +152,7 @@ test("setup endpoints reject requests after setup completes", async ({ request }
 });
 
 test("settings pages and audit log render; sign out and back in", async ({ page }) => {
-  await page.goto("/admin/login");
-  await page.getByLabel("Email").fill(OWNER.email);
-  await page.getByLabel("Password").fill(OWNER.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Welcome, Asha" })).toBeVisible();
+  await signIn(page);
 
   for (const [link, heading] of [
     ["General", "Store details"], ["Storage", "Storage"], ["Payments", "Payments"], ["Email", "Email"],
