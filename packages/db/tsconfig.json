@@ -1,0 +1,5 @@
+{
+  "extends": "@shopkit/config/tsconfig.node.json",
+  "compilerOptions": { "rootDir": ".", "noEmit": true },
+  "include": ["src", "vitest.config.ts", "drizzle.config.ts"]
+}
