@@ -66,7 +66,7 @@ export function createLocalStorage(ctx: ProviderContext<LocalConfig, Record<stri
         return null;
       }
     },
-    // eslint-disable-next-line @typescript-eslint/require-await
+     
     async getSignedUrl(key, { expiresIn }) {
       const exp = Math.floor(Date.now() / 1000) + expiresIn;
       const sig = hmacHex(ctx.runtime.signingSecret, `${ctx.storeId}/${assertSafeKey(key)}:${exp}`);

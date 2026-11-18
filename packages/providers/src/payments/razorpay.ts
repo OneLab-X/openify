@@ -182,7 +182,7 @@ export function createRazorpay(ctx: ProviderContext<RazorpayConfig, RazorpaySecr
     },
 
     // Signature is checked on the exact raw bytes before anything is parsed.
-    // eslint-disable-next-line @typescript-eslint/require-await
+     
     async parseWebhook(rawBody, headers) {
       const secret = ctx.secrets.webhookSecret;
       if (!secret) throw new WebhookSignatureError("Razorpay webhook secret is not configured");

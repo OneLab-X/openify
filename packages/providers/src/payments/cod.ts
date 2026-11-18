@@ -24,7 +24,7 @@ const configSchema = z.object({
 const secretsSchema = z.object({});
 type CodConfig = z.infer<typeof configSchema>;
 
-/* eslint-disable @typescript-eslint/require-await -- COD has no remote calls; methods stay async for the interface */
+ 
 function createCod(ctx: ProviderContext<CodConfig, Record<string, never>>): PaymentProvider {
   const manual = () => {
     throw new ProviderError("Cash on Delivery payments are recorded manually");
@@ -51,7 +51,7 @@ function createCod(ctx: ProviderContext<CodConfig, Record<string, never>>): Paym
     getPayment: async () => manual(),
   };
 }
-/* eslint-enable @typescript-eslint/require-await */
+ 
 
 export const cod: ProviderDefinition<"payment", CodConfig, Record<string, never>> = {
   id: "cod",
