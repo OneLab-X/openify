@@ -1,0 +1,16 @@
+{
+  "event": "checkout.order.failed",
+  "payload": {
+    "orderId": "OMO2511191530002",
+    "merchantId": "M1",
+    "merchantOrderId": "SET_BY_TEST",
+    "state": "FAILED",
+    "amount": 49900,
+    "errorCode": "PAYMENT_ERROR",
+    "detailedErrorCode": "TXN_DECLINED",
+    "metaInfo": {
+      "udf1": "0190a1b2-0000-7000-8000-00000000abcd"
+    },
+    "paymentDetails": []
+  }
+}

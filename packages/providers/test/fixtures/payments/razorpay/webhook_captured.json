@@ -1,0 +1,26 @@
+{
+  "entity": "event",
+  "account_id": "acc_1",
+  "event": "payment.captured",
+  "contains": [
+    "payment"
+  ],
+  "payload": {
+    "payment": {
+      "entity": {
+        "id": "pay_Pk1",
+        "entity": "payment",
+        "amount": 49900,
+        "amount_refunded": 0,
+        "currency": "INR",
+        "status": "captured",
+        "order_id": "order_Pk1",
+        "method": "upi",
+        "notes": {
+          "orderId": "0190a1b2-0000-7000-8000-00000000abcd"
+        }
+      }
+    }
+  },
+  "created_at": 1763500000
+}

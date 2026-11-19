@@ -1,0 +1,10 @@
+{
+  "cf_refund_id": "11325632",
+  "cf_payment_id": "5114910513",
+  "refund_id": "rf_1",
+  "order_id": "sk_0190a1b200007000800000000000abcd_12i4",
+  "entity": "refund",
+  "refund_amount": 100.0,
+  "refund_currency": "INR",
+  "refund_status": "PENDING"
+}

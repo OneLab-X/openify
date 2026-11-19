@@ -1,0 +1,12 @@
+{
+  "id": "order_Pk1",
+  "entity": "order",
+  "amount": 49900,
+  "amount_paid": 0,
+  "currency": "INR",
+  "receipt": "0190a1b2-0000-7000-8000-00000000abcd",
+  "status": "created",
+  "notes": {
+    "orderId": "0190a1b2-0000-7000-8000-00000000abcd"
+  }
+}

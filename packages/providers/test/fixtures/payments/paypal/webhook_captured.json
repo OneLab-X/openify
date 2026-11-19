@@ -1,0 +1,21 @@
+{
+  "id": "WH-58D329510W468432D-8HN650336L201105X",
+  "event_version": "1.0",
+  "create_time": "2025-11-19T10:00:00Z",
+  "resource_type": "capture",
+  "event_type": "PAYMENT.CAPTURE.COMPLETED",
+  "resource": {
+    "id": "3C679366HH908993F",
+    "status": "COMPLETED",
+    "amount": {
+      "currency_code": "USD",
+      "value": "49.90"
+    },
+    "custom_id": "0190a1b2-0000-7000-8000-00000000abcd",
+    "supplementary_data": {
+      "related_ids": {
+        "order_id": "5O190127TN364715T"
+      }
+    }
+  }
+}

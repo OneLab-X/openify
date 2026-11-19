@@ -1,0 +1,14 @@
+{
+  "id": "3C679366HH908993F",
+  "status": "COMPLETED",
+  "amount": {
+    "currency_code": "USD",
+    "value": "49.90"
+  },
+  "custom_id": "0190a1b2-0000-7000-8000-00000000abcd",
+  "supplementary_data": {
+    "related_ids": {
+      "order_id": "5O190127TN364715T"
+    }
+  }
+}

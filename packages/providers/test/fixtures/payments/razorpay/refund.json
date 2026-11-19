@@ -1,0 +1,8 @@
+{
+  "id": "rfnd_Pk1",
+  "entity": "refund",
+  "amount": 10000,
+  "currency": "INR",
+  "payment_id": "pay_Pk1",
+  "status": "processed"
+}

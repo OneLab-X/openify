@@ -1,0 +1,22 @@
+{
+  "id": "pi_3Pk1",
+  "object": "payment_intent",
+  "amount": 49900,
+  "amount_received": 49900,
+  "currency": "inr",
+  "status": "succeeded",
+  "client_secret": "pi_3Pk1_secret_abc",
+  "metadata": {
+    "order_id": "0190a1b2-0000-7000-8000-00000000abcd"
+  },
+  "last_payment_error": null,
+  "latest_charge": {
+    "id": "ch_3Pk1",
+    "object": "charge",
+    "amount": 49900,
+    "amount_refunded": 0,
+    "payment_method_details": {
+      "type": "card"
+    }
+  }
+}

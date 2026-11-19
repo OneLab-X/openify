@@ -1,0 +1,24 @@
+{
+  "id": "evt_3Pk2",
+  "object": "event",
+  "type": "payment_intent.payment_failed",
+  "created": 1763500001,
+  "livemode": false,
+  "data": {
+    "object": {
+      "id": "pi_3Pk1",
+      "object": "payment_intent",
+      "amount": 49900,
+      "amount_received": 0,
+      "currency": "inr",
+      "status": "requires_payment_method",
+      "client_secret": "pi_3Pk1_secret_abc",
+      "metadata": {
+        "order_id": "0190a1b2-0000-7000-8000-00000000abcd"
+      },
+      "last_payment_error": {
+        "message": "Your card was declined."
+      }
+    }
+  }
+}

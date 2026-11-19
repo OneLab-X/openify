@@ -19,6 +19,7 @@ import {
  * return is a fast path, and the webhook (raw-body HMAC) is the source of truth.
  */
 export const RAZORPAY_API = "https://api.razorpay.com/v1";
+export const RAZORPAY_CHECKOUT_JS = "https://checkout.razorpay.com/v1/checkout.js";
 
 const configSchema = z.object({
   keyId: z
@@ -111,10 +112,13 @@ const EVENT_MAP: Record<string, NormalizedWebhookType> = {
 
 export function createRazorpay(ctx: ProviderContext<RazorpayConfig, RazorpaySecrets>): PaymentProvider {
   const { keyId } = ctx.config;
+  const sandbox = ctx.mode === "test" ? ctx.runtime.paymentSandbox : undefined;
+  const apiBase = sandbox ? `${sandbox.internalUrl}/razorpay/v1` : RAZORPAY_API;
+  const scriptUrl = sandbox ? `${sandbox.publicUrl}/razorpay/checkout.js` : RAZORPAY_CHECKOUT_JS;
   const auth = `Basic ${Buffer.from(`${keyId}:${ctx.secrets.keySecret}`).toString("base64")}`;
 
   async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
-    const res = await request(`${RAZORPAY_API}${path}`, {
+    const res = await request(`${apiBase}${path}`, {
       method,
       headers: { Authorization: auth, ...(body ? { "Content-Type": "application/json" } : {}) },
       ...(body ? { body: JSON.stringify(body) } : {}),
@@ -157,6 +161,7 @@ export function createRazorpay(ctx: ProviderContext<RazorpayConfig, RazorpaySecr
         providerOrderId: rzp.id,
         clientPayload: {
           provider: "razorpay",
+          scriptUrl,
           keyId,
           orderId: rzp.id,
           amount: rzp.amount,
@@ -240,5 +245,6 @@ export const razorpay: ProviderDefinition<"payment", RazorpayConfig, RazorpaySec
   secretsSchema,
   last4Field: "keySecret",
   webhookEvents: ["payment.captured", "payment.failed", "order.paid", "refund.processed", "refund.failed"],
+  paymentFlow: "widget",
   create: createRazorpay,
 };

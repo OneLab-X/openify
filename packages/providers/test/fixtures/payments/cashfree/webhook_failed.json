@@ -1,0 +1,22 @@
+{
+  "data": {
+    "order": {
+      "order_id": "sk_0190a1b200007000800000000000abcd_12i4",
+      "order_amount": 499.0,
+      "order_currency": "INR",
+      "order_tags": {
+        "shopkit_order": "0190a1b2-0000-7000-8000-00000000abcd"
+      }
+    },
+    "payment": {
+      "cf_payment_id": "5114910514",
+      "payment_status": "FAILED",
+      "payment_amount": 499.0,
+      "payment_currency": "INR",
+      "payment_message": "Insufficient balance",
+      "payment_group": "upi"
+    }
+  },
+  "event_time": "2025-11-19T15:31:00+05:30",
+  "type": "PAYMENT_FAILED_WEBHOOK"
+}

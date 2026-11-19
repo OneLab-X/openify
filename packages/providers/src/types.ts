@@ -16,6 +16,11 @@ export interface ProviderRuntime {
   dataDir: string;
   /** Secret for signing local media URLs. */
   signingSecret: string;
+  /**
+   * Local payment sandbox (e2e only). When set, payment adapters in *test* mode call it instead of
+   * the provider's sandbox API; live mode never uses it. `publicUrl` is what the browser loads.
+   */
+  paymentSandbox?: { internalUrl: string; publicUrl: string };
 }
 
 export interface ProviderContext<Config, Secrets> {
@@ -113,7 +118,8 @@ export interface PaymentProvider extends ProviderBase {
   verifyReturn(payload: Record<string, unknown>): Promise<PaymentResult>;
   parseWebhook(rawBody: Buffer, headers: Record<string, string | string[] | undefined>): Promise<PaymentWebhookEvent>;
   capture?(paymentId: string, amount: number, currency: string): Promise<PaymentTransaction>;
-  refund(paymentId: string, amount: number, reason?: string): Promise<PaymentTransaction>;
+  /** `idempotencyKey` (our refund id) makes a retried refund safe at providers that support it. */
+  refund(paymentId: string, amount: number, reason?: string, idempotencyKey?: string): Promise<PaymentTransaction>;
   getPayment(paymentId: string): Promise<PaymentResult>;
 }
 
@@ -229,6 +235,11 @@ export interface ProviderDefinition<K extends ProviderKind = ProviderKind, Confi
   last4Field?: string;
   /** Events to enable in the provider dashboard (payments). */
   webhookEvents?: readonly string[];
+  /**
+   * Payments: how the shopper pays. `widget` opens the provider's script on our page, `redirect`
+   * sends them to the provider and back, `offline` (COD, bank transfer) places the order unpaid.
+   */
+  paymentFlow?: "widget" | "redirect" | "offline";
   create(ctx: ProviderContext<Config, Secrets>): ProviderInstances[K];
 }
 

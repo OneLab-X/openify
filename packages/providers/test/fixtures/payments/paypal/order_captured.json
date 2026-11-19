@@ -1,0 +1,28 @@
+{
+  "id": "5O190127TN364715T",
+  "status": "COMPLETED",
+  "purchase_units": [
+    {
+      "reference_id": "0190a1b2-0000-7000-8000-00000000abcd",
+      "custom_id": "0190a1b2-0000-7000-8000-00000000abcd",
+      "amount": {
+        "currency_code": "USD",
+        "value": "49.90"
+      },
+      "payments": {
+        "captures": [
+          {
+            "id": "3C679366HH908993F",
+            "status": "COMPLETED",
+            "amount": {
+              "currency_code": "USD",
+              "value": "49.90"
+            },
+            "custom_id": "0190a1b2-0000-7000-8000-00000000abcd",
+            "final_capture": true
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "pi_3Pk1",
+  "object": "payment_intent",
+  "amount": 49900,
+  "amount_received": 0,
+  "currency": "inr",
+  "status": "requires_payment_method",
+  "client_secret": "pi_3Pk1_secret_abc",
+  "metadata": {
+    "order_id": "0190a1b2-0000-7000-8000-00000000abcd"
+  },
+  "last_payment_error": null,
+  "latest_charge": null
+}

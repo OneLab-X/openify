@@ -1,0 +1,18 @@
+{
+  "orderId": "OMO2511191530001",
+  "state": "COMPLETED",
+  "amount": 49900,
+  "expireAt": 1763501800000,
+  "metaInfo": {
+    "udf1": "0190a1b2-0000-7000-8000-00000000abcd"
+  },
+  "paymentDetails": [
+    {
+      "paymentMode": "UPI_QR",
+      "transactionId": "OM12334",
+      "timestamp": 1763500100000,
+      "amount": 49900,
+      "state": "COMPLETED"
+    }
+  ]
+}

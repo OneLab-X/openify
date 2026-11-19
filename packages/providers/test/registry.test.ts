@@ -8,7 +8,7 @@ describe("ProviderRegistry", () => {
 
   it("registers the implemented providers", () => {
     expect(reg.definitions().map((d) => `${d.kind}:${d.id}`).sort()).toEqual([
-      "analytics:ga4", "analytics:plausible", "email:resend", "email:smtp", "payment:cod", "payment:razorpay",
+      "analytics:ga4", "analytics:plausible", "email:resend", "email:smtp", "payment:bank-transfer", "payment:cashfree", "payment:cod", "payment:paypal", "payment:phonepe", "payment:razorpay", "payment:stripe",
       "storage:azure-blob", "storage:b2", "storage:gcs", "storage:google-drive", "storage:local", "storage:r2", "storage:s3", "storage:s3-compatible",
     ]);
     expect(reg.describe("storage").every((d) => d.status === "available")).toBe(true);
@@ -33,8 +33,8 @@ describe("ProviderRegistry", () => {
 
   it("get/require/duplicate handling", () => {
     expect(reg.get("payment", "cod")).toBe(cod);
-    expect(reg.get("payment", "stripe")).toBeUndefined();
-    expect(() => reg.require("payment", "stripe")).toThrow(UnknownProviderError);
+    expect(reg.get("payment", "nope")).toBeUndefined();
+    expect(() => reg.require("payment", "nope")).toThrow(UnknownProviderError);
     expect(() => reg.register(cod)).toThrow(/already registered/);
     expect(() => new ProviderRegistry().register({ ...cod, modes: [] })).toThrow(/at least one mode/);
   });

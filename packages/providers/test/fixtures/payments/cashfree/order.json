@@ -1,0 +1,12 @@
+{
+  "cf_order_id": "2149460581",
+  "order_id": "sk_0190a1b200007000800000000000abcd_12i4",
+  "entity": "order",
+  "order_currency": "INR",
+  "order_amount": 499.0,
+  "order_status": "ACTIVE",
+  "payment_session_id": "session_abc123",
+  "order_tags": {
+    "shopkit_order": "0190a1b2-0000-7000-8000-00000000abcd"
+  }
+}

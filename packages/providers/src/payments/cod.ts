@@ -59,6 +59,7 @@ export const cod: ProviderDefinition<"payment", CodConfig, Record<string, never>
   displayName: "Cash on Delivery",
   description: "Customer pays the courier on delivery.",
   modes: ["live"],
+  paymentFlow: "offline",
   configSchema,
   secretsSchema,
   create: createCod,

@@ -1,0 +1,15 @@
+{
+  "id": "1JU08902781691411",
+  "status": "COMPLETED",
+  "amount": {
+    "currency_code": "USD",
+    "value": "10.00"
+  },
+  "links": [
+    {
+      "href": "https://api-m.paypal.com/v2/payments/captures/3C679366HH908993F",
+      "rel": "up",
+      "method": "GET"
+    }
+  ]
+}

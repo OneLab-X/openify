@@ -3,6 +3,12 @@ export { ProviderRegistry, UnknownProviderError, type ProviderDescriptor } from 
 export { createDefaultRegistry, COMING_SOON } from "./default-registry.js";
 export { razorpay, RAZORPAY_API } from "./payments/razorpay.js";
 export { cod } from "./payments/cod.js";
+export { stripe, STRIPE_API, verifyStripeSignature, formEncode } from "./payments/stripe.js";
+export { paypal, PAYPAL_API } from "./payments/paypal.js";
+export { cashfree, CASHFREE_API, cashfreeOrderId } from "./payments/cashfree.js";
+export { phonepe, PHONEPE_API } from "./payments/phonepe.js";
+export { bankTransfer } from "./payments/bank-transfer.js";
+export { toDecimal, toMinor, currencyDigits } from "./payments/money.js";
 export { localStorage } from "./storage/local.js";
 export { s3Storage, s3CompatibleStorage, r2Storage, b2Storage, createS3Storage, type S3Settings } from "./storage/s3.js";
 export { gcsStorage } from "./storage/gcs.js";

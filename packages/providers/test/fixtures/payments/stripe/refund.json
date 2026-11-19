@@ -1,0 +1,8 @@
+{
+  "id": "re_3Pk1",
+  "object": "refund",
+  "amount": 10000,
+  "currency": "inr",
+  "payment_intent": "pi_3Pk1",
+  "status": "succeeded"
+}
