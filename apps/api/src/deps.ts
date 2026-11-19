@@ -23,6 +23,9 @@ export function buildDeps(config: Config, logger: Logger, env: Record<string, st
       publicUrl: config.PUBLIC_URL,
       dataDir: resolve(config.SHOPKIT_DATA_DIR),
       signingSecret: config.SESSION_SECRET,
+      ...(config.PAYMENT_SANDBOX_URL
+        ? { paymentSandbox: { internalUrl: config.PAYMENT_SANDBOX_URL.replace(/\/$/, ""), publicUrl: (config.PAYMENT_SANDBOX_PUBLIC_URL ?? config.PAYMENT_SANDBOX_URL).replace(/\/$/, "") } }
+        : {}),
     },
     logger,
     ...(config.MEILISEARCH_URL ? { search: meiliSearch(handle.db, { url: config.MEILISEARCH_URL, apiKey: config.MEILISEARCH_API_KEY }) } : {}),

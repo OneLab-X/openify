@@ -17,6 +17,9 @@ import { healthRoutes } from "./routes/health.js";
 import { mediaRoutes } from "./routes/media.js";
 import { setupRoutes } from "./routes/setup.js";
 import { storefrontRoutes } from "./routes/storefront.js";
+import { storefrontCommerceRoutes } from "./routes/storefront-commerce.js";
+import { webhookRoutes } from "./routes/webhooks.js";
+import { commerceRoutes } from "./routes/commerce.js";
 
 export interface BuildOptions {
   logger?: FastifyBaseLogger;
@@ -58,7 +61,7 @@ export async function buildApp(deps: AppDeps, config: Config, opts: BuildOptions
       openapi: "3.1.0",
       info: { title: "Shopkit API", version: "0.1.0", description: "Setup, Admin and Storefront APIs" },
       servers: [{ url: "/" }],
-      tags: [{ name: "setup" }, { name: "auth" }, { name: "admin" }, { name: "storefront" }],
+      tags: [{ name: "setup" }, { name: "auth" }, { name: "admin" }, { name: "storefront" }, { name: "webhooks" }],
     },
     transform: jsonSchemaTransform,
     transformObject: jsonSchemaTransformObject,
@@ -70,7 +73,10 @@ export async function buildApp(deps: AppDeps, config: Config, opts: BuildOptions
   await app.register(authRoutes, { prefix: "/api/admin/auth", deps, config });
   await app.register(adminRoutes, { prefix: "/api/admin", deps });
   await app.register(catalogRoutes, { prefix: "/api/admin", deps });
+  await app.register(commerceRoutes, { prefix: "/api/admin", deps });
   await app.register(storefrontRoutes, { prefix: "/api/storefront", deps });
+  await app.register(storefrontCommerceRoutes, { prefix: "/api/storefront", deps, config });
+  await app.register(webhookRoutes, { prefix: "/api/webhooks", deps });
   await app.register(mediaRoutes, { deps });
 
   return app;

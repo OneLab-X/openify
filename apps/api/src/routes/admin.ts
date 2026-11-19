@@ -57,6 +57,9 @@ const SETTING_PERMISSION: Record<keyof typeof SETTINGS, Permission> = {
   "payments.mode": "settings:payments",
   "shipping.defaults": "settings:shipping",
   "tax.config": "settings:shipping",
+  "checkout.config": "settings:general",
+  "notifications.config": "settings:email",
+  "notifications.templates": "settings:email",
 };
 
 export const adminRoutes: FastifyPluginAsyncZod<{ deps: AppDeps }> = async (app, { deps }) => {
@@ -180,6 +183,8 @@ export const adminRoutes: FastifyPluginAsyncZod<{ deps: AppDeps }> = async (app,
         consentBanner: await getSetting(deps.db, id, "analytics.consentBanner"),
         shipping: await getSetting(deps.db, id, "shipping.defaults"),
         tax: await getSetting(deps.db, id, "tax.config"),
+        checkout: await getSetting(deps.db, id, "checkout.config"),
+        notifications: await getSetting(deps.db, id, "notifications.config"),
       };
     },
   );

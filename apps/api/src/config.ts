@@ -15,6 +15,12 @@ const envSchema = z.object({
   /** Optional Meilisearch (compose profile `meilisearch`); Postgres full-text is used without it. */
   MEILISEARCH_URL: z.preprocess((v) => (v === "" ? undefined : v), z.url().optional()),
   MEILISEARCH_API_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  /**
+   * e2e only: local payment sandbox that test-mode Razorpay/Stripe/… adapters call instead of the
+   * providers' sandboxes (live mode ignores it). Internal URL for the API, public URL for browsers.
+   */
+  PAYMENT_SANDBOX_URL: z.preprocess((v) => (v === "" ? undefined : v), z.url().optional()),
+  PAYMENT_SANDBOX_PUBLIC_URL: z.preprocess((v) => (v === "" ? undefined : v), z.url().optional()),
   TRUST_PROXY: z
     .string()
     .default("true")

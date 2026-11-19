@@ -112,7 +112,20 @@ export const settingsView = z
       gstin: z.string().optional(),
       registeredState: z.string().optional(),
       label: z.string().optional(),
+      taxShipping: z.boolean().optional(),
     }),
+    checkout: z
+      .object({ reservationMinutes: z.number().int(), orderPrefix: z.string(), requirePhone: z.boolean(), customerAuth: z.enum(["otp", "password"]) })
+      .optional(),
+    notifications: z
+      .object({
+        abandonedCheckoutEnabled: z.boolean(),
+        abandonedCheckoutDelayMinutes: z.number().int(),
+        merchantEmails: z.array(z.string()),
+        alertNewOrder: z.boolean(),
+        alertPaidOrder: z.boolean(),
+      })
+      .optional(),
   })
   .meta({ id: "Settings" });
 
