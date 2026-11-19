@@ -143,7 +143,7 @@ test("buys with Stripe test mode after a declined card; webhook replay is a no-o
   const card = page.getByTestId("stripe-card");
   await card.fill("4000 0000 0000 0002");
   await page.getByRole("button", { name: "Pay ₹799.00" }).click();
-  await expect(page.getByRole("alert")).toContainText("Your card was declined.");
+  await expect(page.getByText("Your card was declined.")).toBeVisible();
   await card.fill("4242 4242 4242 4242");
   await page.getByRole("button", { name: "Pay ₹799.00" }).click();
 

@@ -100,7 +100,7 @@ export function CheckoutForm({ checkoutId, shopName, locale, initialError }: { c
     setError(null);
     setStripeConfirm(null);
     try {
-      const v = await save({ ...contactPatch(), ...addressPatch() });
+      const v = await save({ ...contactPatch(), ...addressPatch(), ...(view?.paymentProvider ? { paymentProvider: view.paymentProvider } : {}), ...(view?.shippingRateId ? { shippingRateId: view.shippingRateId } : {}) });
       if (!v) return;
       if (v.missing.length) {
         setError(
@@ -245,7 +245,10 @@ export function CheckoutForm({ checkoutId, shopName, locale, initialError }: { c
               view.shippingRates.map((r) => (
                 <label key={r.id} className="flex items-center justify-between rounded-md border border-input px-3 py-2 text-sm">
                   <span className="flex items-center gap-2">
-                    <input type="radio" name="rate" checked={view.shippingRateId === r.id} onChange={() => void save({ shippingRateId: r.id })} />
+                    <input type="radio" name="rate" checked={view.shippingRateId === r.id} onChange={() => {
+                      setView({ ...view, shippingRateId: r.id });
+                      void save({ shippingRateId: r.id });
+                    }} />
                     {r.title}
                   </span>
                   <span>{r.amount === 0 ? "Free" : money(r.amount)}</span>
@@ -262,7 +265,10 @@ export function CheckoutForm({ checkoutId, shopName, locale, initialError }: { c
           {view.paymentMethods.length === 0 ? <p className="text-sm text-red-700">This shop has no payment methods set up yet.</p> : null}
           {view.paymentMethods.map((m) => (
             <label key={m.id} className="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm">
-              <input type="radio" name="payment" value={m.id} checked={view.paymentProvider === m.id} onChange={() => void save({ paymentProvider: m.id })} />
+              <input type="radio" name="payment" value={m.id} checked={view.paymentProvider === m.id} onChange={() => {
+                  setView({ ...view, paymentProvider: m.id });
+                  void save({ paymentProvider: m.id });
+                }} />
               {m.displayName}
             </label>
           ))}
