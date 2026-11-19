@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { buffer as readAll } from "node:stream/consumers";
-import { and, collections, eq, media, stores, uuidv7, type MediaRendition } from "@shopkit/db";
+import { and, collections, eq, media, stores, UUID_RE, uuidv7, type MediaRendition } from "@shopkit/db";
 import { z } from "zod";
 import { writeAudit } from "../audit.js";
 import { loadProvider } from "../credentials.js";
@@ -176,6 +176,7 @@ const PROCESSABLE = new Set(["image/png", "image/jpeg", "image/webp", "image/gif
  * metadata and applying EXIF orientation. Idempotent: renditions are recreated with the same keys.
  */
 export async function processMedia(deps: CoreDeps, mediaId: string): Promise<{ status: "processed" | "skipped"; renditions?: number; reason?: string }> {
+  if (!UUID_RE.test(mediaId)) return { status: "skipped", reason: "invalid media id" };
   const [row] = await deps.db.select().from(media).where(eq(media.id, mediaId));
   if (!row) return { status: "skipped", reason: "media deleted" };
   if (row.status !== "ready") return { status: "skipped", reason: `media is ${row.status}` };

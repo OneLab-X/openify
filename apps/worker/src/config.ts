@@ -12,6 +12,14 @@ const envSchema = z.object({
   WORKER_CONCURRENCY: z.coerce.number().int().min(1).default(5),
   STOREFRONT_INTERNAL_URL: z.url().optional(),
   REVALIDATE_SECRET: z.string().min(16).optional(),
+  MEILISEARCH_URL: z.url().optional(),
+  MEILISEARCH_API_KEY: z.string().optional(),
+  /** Test stacks only: lets CSV image URLs point at private addresses (SSRF guard off). */
+  IMPORT_ALLOW_PRIVATE_URLS: z
+    .string()
+    .default("false")
+    .transform((v) => v === "true"),
+  IMAGE_CONCURRENCY: z.coerce.number().int().min(1).default(2),
 });
 export type WorkerConfig = z.infer<typeof envSchema>;
 

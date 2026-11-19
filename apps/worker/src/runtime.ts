@@ -1,9 +1,13 @@
 import { resolve } from "node:path";
 import {
+  deleteStoredObjects,
   deliverEmail,
   dispatchOutbox,
   emailJob,
+  meiliSearch,
+  processMedia,
   routeOutboxEvent,
+  runJob,
   type CoreDeps,
   type Logger,
   type OutboxEvent,
@@ -45,6 +49,7 @@ export function createRuntime(config: WorkerConfig, logger: Logger, env: Record<
     registry: createDefaultRegistry(),
     runtime: { publicUrl: config.PUBLIC_URL, dataDir: resolve(config.SHOPKIT_DATA_DIR), signingSecret: config.SESSION_SECRET },
     logger,
+    ...(config.MEILISEARCH_URL ? { search: meiliSearch(db.db, { url: config.MEILISEARCH_URL, apiKey: config.MEILISEARCH_API_KEY }) } : {}),
   };
 
   const queueConn = connection();
@@ -84,15 +89,36 @@ export function createRuntime(config: WorkerConfig, logger: Logger, env: Record<
       if (!res.ok) throw new Error(`storefront revalidate failed (${res.status})`);
       return { status: "revalidated", tags };
     },
-    // Phase 2 re-encodes and resizes with sharp; Phase 1 only acknowledges the job.
     images: async (job) => {
-      logger.info({ jobId: job.id, mediaId: (job.data as { mediaId?: string }).mediaId }, "image job (stub)");
-      return { status: "skipped", reason: "image processing arrives in phase 2" };
+      const data = job.data as { storeId: string; mediaId?: string; provider?: string; keys?: string[] };
+      if (job.name === "delete") return deleteStoredObjects(deps, data.storeId, data.provider!, data.keys ?? []);
+      const result = await processMedia(deps, data.mediaId!);
+      logger.info({ jobId: job.id, mediaId: data.mediaId, ...result }, "image job");
+      return result;
     },
+    "search-index": async (job) => {
+      if (!deps.search) return { status: "skipped", reason: "postgres search needs no index" };
+      const { storeId, productIds } = job.data as { storeId: string; productIds: string[] };
+      await deps.search.sync(storeId, productIds);
+      return { status: "indexed", count: productIds.length };
+    },
+    imports: async (job) => {
+      const result = await runJob(deps, (job.data as { jobId: string }).jobId, { allowPrivateUrls: config.IMPORT_ALLOW_PRIVATE_URLS });
+      logger.info({ jobId: job.id, ...result }, "import/export job");
+      return result;
+    },
+    "media-migration": async (job) => runJob(deps, (job.data as { jobId: string }).jobId),
   };
+  const concurrency: Partial<Record<QueueName, number>> = { images: config.IMAGE_CONCURRENCY, imports: 1, "media-migration": 1 };
 
   const workers = (Object.entries(processors) as [QueueName, (job: Job) => Promise<unknown>][]).map(([name, fn]) => {
-    const w = new Worker(name, fn, { connection: connection(), prefix: "sk", concurrency: config.WORKER_CONCURRENCY });
+    const w = new Worker(name, fn, {
+      connection: connection(),
+      prefix: "sk",
+      concurrency: concurrency[name] ?? config.WORKER_CONCURRENCY,
+      // CSV imports and migrations can run for minutes; keep the lock renewed generously.
+      ...(name === "imports" || name === "media-migration" ? { lockDuration: 120_000 } : {}),
+    });
     w.on("failed", (job, err) =>
       logger.warn({ queue: name, jobId: job?.id, attempts: job?.attemptsMade, err: err.message }, "job failed"),
     );
