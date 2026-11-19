@@ -10,6 +10,9 @@ import { phonepe } from "./payments/phonepe.js";
 import { razorpay } from "./payments/razorpay.js";
 import { stripe } from "./payments/stripe.js";
 import { ProviderRegistry } from "./registry.js";
+import { delhivery } from "./shipping/delhivery.js";
+import { easypost } from "./shipping/easypost.js";
+import { shiprocket } from "./shipping/shiprocket.js";
 import { localStorage } from "./storage/local.js";
 import { azureBlobStorage } from "./storage/azure.js";
 import { gcsStorage } from "./storage/gcs.js";
@@ -25,15 +28,11 @@ export const COMING_SOON: ComingSoonProvider[] = [
   { kind: "analytics", id: "matomo", displayName: "Matomo" },
   { kind: "analytics", id: "posthog", displayName: "PostHog" },
   { kind: "analytics", id: "meta-pixel", displayName: "Meta Pixel" },
-  { kind: "shipping", id: "manual", displayName: "Manual / local delivery" },
-  { kind: "shipping", id: "shiprocket", displayName: "Shiprocket" },
-  { kind: "shipping", id: "delhivery", displayName: "Delhivery" },
-  { kind: "shipping", id: "easypost", displayName: "EasyPost" },
 ];
 
 export function createDefaultRegistry(): ProviderRegistry {
   const registry = new ProviderRegistry();
-  for (const def of [localStorage, s3CompatibleStorage, s3Storage, r2Storage, gcsStorage, azureBlobStorage, b2Storage, googleDriveStorage, razorpay, stripe, paypal, cashfree, phonepe, cod, bankTransfer, smtp, resend, ga4, plausible]) {
+  for (const def of [localStorage, s3CompatibleStorage, s3Storage, r2Storage, gcsStorage, azureBlobStorage, b2Storage, googleDriveStorage, razorpay, stripe, paypal, cashfree, phonepe, cod, bankTransfer, smtp, resend, ga4, plausible, shiprocket, delhivery, easypost]) {
     registry.register(def);
   }
   for (const entry of COMING_SOON) registry.registerComingSoon(entry);

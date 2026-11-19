@@ -196,18 +196,92 @@ export interface AnalyticsProvider extends ProviderBase {
 }
 
 // ── Shipping ────────────────────────────────────────────────────────────────
+export interface ShipmentParty {
+  name: string;
+  company?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  line1: string;
+  line2?: string | null;
+  city: string;
+  province?: string | null;
+  postalCode: string;
+  /** ISO 3166-1 alpha-2. */
+  country: string;
+}
+
+export interface ShipmentParcel {
+  weightGrams: number;
+  lengthCm?: number;
+  widthCm?: number;
+  heightCm?: number;
+}
+
+export interface RateRequest {
+  from: ShipmentParty;
+  to: ShipmentParty;
+  parcel: ShipmentParcel;
+  /** Declared value in minor units of `currency`. */
+  declaredValue: number;
+  currency: string;
+  /** Cash on delivery amount to collect (minor units), if any. */
+  codAmount?: number | null;
+}
+
 export interface ShippingRate {
   id: string;
   name: string;
+  /** Minor units of `currency`. */
   amount: number;
   currency: string;
+  carrier?: string;
   etaDays?: number;
 }
 
+export interface CreateShipmentInput extends RateRequest {
+  /** Our fulfillment id (idempotency/reference at the carrier). */
+  reference: string;
+  orderName: string;
+  orderDate: string;
+  /** A rate id from `rates()`; adapters pick the cheapest when omitted. */
+  rateId?: string | null;
+  items: { name: string; sku?: string | null; quantity: number; unitPrice: number; hsnCode?: string | null }[];
+}
+
+export interface ShipmentResult {
+  shipmentId: string;
+  awb: string;
+  carrier?: string;
+  labelUrl?: string | null;
+  trackingUrl?: string | null;
+}
+
+export type TrackingState = "pending" | "in_transit" | "out_for_delivery" | "delivered" | "failed" | "returned" | "cancelled";
+
+export interface TrackingStatus {
+  state: TrackingState;
+  description: string;
+  events: { at: string; description: string; location?: string | null }[];
+}
+
+/** A normalised tracking push from a carrier. `id` dedupes repeats. */
+export interface TrackingWebhookEvent {
+  id: string;
+  awb: string;
+  state: TrackingState;
+  description: string;
+  at: string;
+}
+
 export interface ShippingProvider extends ProviderBase {
-  rates?(shipment: unknown): Promise<ShippingRate[]>;
-  createShipment?(fulfillment: unknown): Promise<{ awb: string; labelUrl?: string; trackingUrl?: string }>;
-  track?(awb: string): Promise<{ status: string; events: { at: string; description: string }[] }>;
+  rates(request: RateRequest): Promise<ShippingRate[]>;
+  createShipment(input: CreateShipmentInput): Promise<ShipmentResult>;
+  /** Label PDF URL for a shipment (may be generated on demand). */
+  label(shipment: { shipmentId: string; awb: string }): Promise<string | null>;
+  track(awb: string): Promise<TrackingStatus>;
+  /** Verifies the push (shared token or HMAC on the raw body) and normalises it. */
+  parseWebhook(rawBody: Buffer, headers: Record<string, string | string[] | undefined>): Promise<TrackingWebhookEvent[]>;
+  trackingUrl(awb: string): string;
 }
 
 export interface ProviderInstances {
