@@ -23,7 +23,31 @@ export const SETTINGS = {
     gstin: z.string().optional(),
     registeredState: z.string().optional(),
     label: z.string().optional(),
+    /** Charge tax on shipping too (GST does; many US states do not). */
+    taxShipping: z.boolean().optional(),
   }),
+  "checkout.config": z.object({
+    /** Minutes an unpaid order holds its inventory before the release job returns it. */
+    reservationMinutes: z.number().int().min(5).max(7 * 24 * 60),
+    /** Order name prefix, e.g. "#" → #1001 or "PLS-" → PLS-1001. */
+    orderPrefix: z.string().max(10),
+    requirePhone: z.boolean(),
+    /** How customers sign in: one-time code by email (default) or a password. */
+    customerAuth: z.enum(["otp", "password"]),
+  }),
+  "notifications.config": z.object({
+    abandonedCheckoutEnabled: z.boolean(),
+    abandonedCheckoutDelayMinutes: z.number().int().min(1).max(7 * 24 * 60),
+    /** Staff addresses for new/paid order alerts; empty = the store email. */
+    merchantEmails: z.array(z.email()).max(10),
+    alertNewOrder: z.boolean(),
+    alertPaidOrder: z.boolean(),
+  }),
+  /** Per-template overrides edited in Settings → Notifications. */
+  "notifications.templates": z.record(
+    z.string(),
+    z.object({ subject: z.string().max(200).optional(), intro: z.string().max(2000).optional(), enabled: z.boolean().optional() }),
+  ),
 } as const;
 export type SettingKey = keyof typeof SETTINGS;
 export type SettingValue<K extends SettingKey> = z.infer<(typeof SETTINGS)[K]>;
@@ -35,6 +59,9 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   "payments.mode": "test",
   "shipping.defaults": { zoneName: "Domestic", countries: [], rateName: "Standard", rateAmount: 0, freeOver: null },
   "tax.config": { mode: "generic", pricesIncludeTax: false, defaultRateBps: 0 },
+  "checkout.config": { reservationMinutes: 30, orderPrefix: "#", requirePhone: false, customerAuth: "otp" },
+  "notifications.config": { abandonedCheckoutEnabled: true, abandonedCheckoutDelayMinutes: 60, merchantEmails: [], alertNewOrder: true, alertPaidOrder: true },
+  "notifications.templates": {},
 };
 
 export async function getSetting<K extends SettingKey>(db: Executor, storeId: string, key: K): Promise<SettingValue<K>> {

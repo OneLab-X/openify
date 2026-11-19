@@ -86,7 +86,7 @@ describe("setup wizard", () => {
     expect(state.currentStep).toBe("review");
     expect(state.store.logoUrl).toBe(`https://shop.test/media/${logo.id}/logo.png`);
     expect(state.owner).toMatchObject({ email: "asha@pls.test" });
-    expect(state.providers.some((p) => p.id === "stripe" && p.status === "coming_soon")).toBe(true);
+    expect(state.providers.some((p) => p.id === "stripe" && p.status === "available")).toBe(true);
     expect(JSON.stringify(state)).not.toContain("mem_key_12345");
 
     await issueSetupToken(deps.redis);

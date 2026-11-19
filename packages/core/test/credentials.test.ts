@@ -64,7 +64,7 @@ describe("credentials", () => {
     await expect(upsertCredential(deps, ACTOR, rzp(), { config: { keyId: "rzp_test_a" }, secrets: {} })).rejects.toMatchObject({
       details: [expect.objectContaining({ path: "secrets.keySecret" })],
     });
-    await expect(upsertCredential(deps, ACTOR, { ...rzp(), provider: "stripe" }, {})).rejects.toMatchObject({ code: "not_found" });
+    await expect(upsertCredential(deps, ACTOR, { ...rzp(), provider: "nope-provider" }, {})).rejects.toMatchObject({ code: "not_found" });
     await expect(upsertCredential(deps, ACTOR, { ...rzp(), provider: "cod" }, {})).rejects.toThrow(/does not support test mode/);
   });
 

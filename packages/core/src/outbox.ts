@@ -14,6 +14,15 @@ export const OUTBOX_EVENT_TYPES = [
   "collection.updated",
   "collection.deleted",
   "job.requested",
+  "customer.otp_requested",
+  "checkout.abandoned",
+  "order.reservation_created",
+  "order.placed",
+  "order.paid",
+  "order.payment_failed",
+  "order.cancelled",
+  "order.refunded",
+  "order.shipping_updated",
 ] as const;
 export type OutboxEventType = (typeof OUTBOX_EVENT_TYPES)[number];
 
