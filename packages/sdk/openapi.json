@@ -11349,7 +11349,6 @@
                               }
                             },
                             "required": [
-                              "locationId",
                               "available"
                             ]
                           }
@@ -11943,7 +11942,6 @@
                               }
                             },
                             "required": [
-                              "locationId",
                               "available"
                             ]
                           }

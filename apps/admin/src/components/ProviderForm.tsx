@@ -113,7 +113,15 @@ export function SchemaFields({
             />
           );
         } else if (p.widget === "textarea") {
-          control = <Textarea {...common} value={str(value)} onChange={(e) => set(e.target.value || undefined)} />;
+          control = (
+            <Textarea
+              {...common}
+              placeholder={saved ? "Saved — leave blank to keep" : undefined}
+              spellCheck={false}
+              value={str(value)}
+              onChange={(e) => set(e.target.value || undefined)}
+            />
+          );
         } else {
           control = (
             <Input

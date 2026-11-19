@@ -29,7 +29,7 @@ import { getStore } from "../stores.js";
 import { afterCursor, orderBy, page, type SortSpec } from "./cursor.js";
 import { HANDLE_RE, slugify, uniqueHandle } from "./handles.js";
 import { sanitizeHtml } from "./html.js";
-import { applyInventoryChanges, ensureInventoryItem, levelsForVariants, type QuantityChange } from "./inventory.js";
+import { applyInventoryChanges, ensureDefaultLocation, ensureInventoryItem, levelsForVariants, type QuantityChange } from "./inventory.js";
 import { mediaByIds, mediaView } from "./media-view.js";
 import { metafieldInput, metafieldsFor, replaceMetafields } from "./metafields.js";
 import { refreshProducts, updateCollectionCount } from "./refresh.js";
@@ -68,8 +68,8 @@ export const variantInput = z.object({
   /** "Track quantity". */
   tracked: z.boolean().default(true),
   imageMediaId: z.uuid().nullish(),
-  /** Absolute "available" quantities to set per location (omitted = unchanged). */
-  inventory: z.array(z.object({ locationId: z.uuid(), available: z.number().int().min(-1_000_000).max(1_000_000_000) })).optional(),
+  /** Absolute "available" quantities to set per location (no locationId = default location; omitted = unchanged). */
+  inventory: z.array(z.object({ locationId: z.uuid().optional(), available: z.number().int().min(-1_000_000).max(1_000_000_000) })).optional(),
 });
 export type VariantInput = z.input<typeof variantInput>;
 
@@ -240,6 +240,7 @@ export async function saveProduct(
       .where(inArray(productVariants.id, [...keep]));
   }
 
+  const defaultLocation = data.variants.some((v) => v.inventory?.some((q) => !q.locationId)) ? await ensureDefaultLocation(tx, storeId) : null;
   const changes: QuantityChange[] = [];
   for (const [i, v] of data.variants.entries()) {
     const row = {
@@ -272,7 +273,7 @@ export async function saveProduct(
       variantId = created!.id;
     }
     const itemId = await ensureInventoryItem(tx, storeId, variantId, v.tracked);
-    for (const q of v.inventory ?? []) changes.push({ inventoryItemId: itemId, locationId: q.locationId, quantity: "available", set: q.available });
+    for (const q of v.inventory ?? []) changes.push({ inventoryItemId: itemId, locationId: q.locationId ?? defaultLocation!, quantity: "available", set: q.available });
   }
   await applyInventoryChanges(tx, actor, storeId, changes, opts.inventoryReason ?? "correction");
 

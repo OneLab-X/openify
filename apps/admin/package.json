@@ -16,7 +16,6 @@
     "@dnd-kit/utilities": "3.2.2",
     "@shopkit/sdk": "workspace:*",
     "@shopkit/ui": "workspace:*",
-    "@tiptap/extension-link": "3.34.0",
     "@tiptap/pm": "3.34.0",
     "@tiptap/react": "3.34.0",
     "@tiptap/starter-kit": "3.34.0",

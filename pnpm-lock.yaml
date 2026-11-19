@@ -50,9 +50,6 @@ importers:
       '@shopkit/ui':
         specifier: workspace:*
         version: link:../../packages/ui
-      '@tiptap/extension-link':
-        specifier: 3.34.0
-        version: 3.34.0(@tiptap/core@3.34.0(@tiptap/pm@3.34.0))(@tiptap/pm@3.34.0)
       '@tiptap/pm':
         specifier: 3.34.0
         version: 3.34.0
@@ -6022,7 +6019,7 @@ snapshots:
       obug: 3.0.0
       std-env: 4.3.0
       tinyrainbow: 3.2.0
-      vitest: 5.1.1(@types/node@22.20.5)(@vitest/coverage-v8@5.1.1)(jsdom@31.0.1)(msw@3.0.7(@types/node@22.20.5)(typescript@6.0.3)(vite@8.3.8(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(vite@8.3.8(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+      vitest: 5.1.1(@types/node@25.9.9)(@vitest/coverage-v8@5.1.1)(jsdom@31.0.1)(msw@3.0.7(@types/node@25.9.9)(typescript@6.0.3)(vite@8.3.8(@types/node@25.9.9)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(vite@8.3.8(@types/node@25.9.9)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   '@vitest/istanbul-lib-coverage@2.1.0': {}
 

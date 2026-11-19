@@ -1,5 +1,5 @@
 "use client";
-import { createShopkitClient } from "@shopkit/sdk";
+import { createShopkitClient, type paths } from "@shopkit/sdk";
 
 /** Browser SDK client: same-origin /api, echoes the CSRF cookie on writes. */
 export const api = createShopkitClient({ baseUrl: "" });
@@ -20,3 +20,6 @@ export async function uploadFile(url: string, file: File): Promise<{ data?: { id
   const json: unknown = await res.json().catch(() => ({}));
   return res.ok ? { data: json as { id: string; url: string } } : { error: json };
 }
+
+/** JSON request body of an operation, e.g. `JsonBody<"/api/admin/products", "post">`. */
+export type JsonBody<P extends keyof paths, M extends "post" | "put" | "patch"> = paths[P][M] extends { requestBody?: { content: { "application/json": infer B } } } ? B : never;

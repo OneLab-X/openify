@@ -6060,7 +6060,7 @@ export interface operations {
                         imageMediaId?: string | null;
                         inventory?: {
                             /** Format: uuid */
-                            locationId: string;
+                            locationId?: string;
                             available: number;
                         }[];
                     }[];
@@ -6350,7 +6350,7 @@ export interface operations {
                         imageMediaId?: string | null;
                         inventory?: {
                             /** Format: uuid */
-                            locationId: string;
+                            locationId?: string;
                             available: number;
                         }[];
                     }[];
