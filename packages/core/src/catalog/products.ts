@@ -33,7 +33,7 @@ import { applyInventoryChanges, ensureDefaultLocation, ensureInventoryItem, leve
 import { mediaByIds, mediaView } from "./media-view.js";
 import { metafieldInput, metafieldsFor, replaceMetafields } from "./metafields.js";
 import { refreshProducts, updateCollectionCount } from "./refresh.js";
-import { productTextMatch } from "./text-search.js";
+import { productTextCondition } from "./text-search.js";
 
 // ── Input ────────────────────────────────────────────────────────────────────
 const money = z.number().int().min(0).max(10_000_000_000_000);
@@ -432,10 +432,16 @@ export function productFilter(storeId: string, q: Omit<z.output<typeof productLi
       q.tag ? sql`exists (select 1 from product_tags pt join tags t on t.id = pt.tag_id where pt.product_id = p.id and t.name = ${q.tag})` : sql`true`,
       q.collectionId ? sql`exists (select 1 from collection_products cp where cp.product_id = p.id and cp.collection_id = ${q.collectionId})` : sql`true`,
       q.availability === "in_stock" ? sql`p.available` : q.availability === "out_of_stock" ? sql`not p.available` : sql`true`,
-      q.q ? productTextMatch(q.q) : sql`true`,
     ],
     sql` and `,
   );
+}
+
+/** productFilter plus the text search (exact, or typo-tolerant when nothing matches exactly). */
+export async function productFilterWithSearch(db: Executor, storeId: string, q: Parameters<typeof productFilter>[1]) {
+  const base = productFilter(storeId, q);
+  if (!q.q) return base;
+  return sql`${base} and ${await productTextCondition(db, base, q.q)}`;
 }
 
 export async function listProductsAdmin(deps: CoreDeps, storeId: string, query: ProductListQuery) {
@@ -443,7 +449,7 @@ export async function listProductsAdmin(deps: CoreDeps, storeId: string, query: 
   const spec = productSort(q.sort);
   const { rows } = await deps.db.execute(sql`
     select p.* from products p
-    where ${productFilter(storeId, q)} and ${afterCursor(spec, q.cursor)}
+    where ${await productFilterWithSearch(deps.db, storeId, q)} and ${afterCursor(spec, q.cursor)}
     order by ${orderBy(spec)}
     limit ${q.limit + 1}`);
   const list = rows.map(fromRaw);

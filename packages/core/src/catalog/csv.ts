@@ -6,7 +6,7 @@ import type { Actor, CoreDeps } from "../deps.js";
 import { AppError } from "../errors.js";
 import { ensureDefaultLocation, levelsForVariants } from "./inventory.js";
 import { importMediaFromUrl } from "./media.js";
-import { productFilter, saveProduct, type ProductInput, type VariantInput } from "./products.js";
+import { productFilterWithSearch, saveProduct, type ProductInput, type VariantInput } from "./products.js";
 
 /**
  * Shopify product CSV (https://help.shopify.com/manual/products/import-export/using-csv). Rows are
@@ -252,11 +252,11 @@ export async function importParsedProduct(
 export async function exportShopifyCsv(
   deps: CoreDeps,
   storeId: string,
-  filter: Parameters<typeof productFilter>[1],
+  filter: Parameters<typeof productFilterWithSearch>[2],
   onProgress?: (done: number, total: number) => Promise<void>,
 ): Promise<{ csv: Buffer; products: number; rows: number }> {
   const db: Executor = deps.db;
-  const { rows: idRows } = await db.execute<{ id: string }>(sql`select p.id from products p where ${productFilter(storeId, filter)} order by p.created_at, p.id`);
+  const { rows: idRows } = await db.execute<{ id: string }>(sql`select p.id from products p where ${await productFilterWithSearch(db, storeId, filter)} order by p.created_at, p.id`);
   const ids = idRows.map((r) => r.id);
   const lines: string[][] = [[...SHOPIFY_COLUMNS]];
   const col = (name: (typeof SHOPIFY_COLUMNS)[number]) => SHOPIFY_COLUMNS.indexOf(name);

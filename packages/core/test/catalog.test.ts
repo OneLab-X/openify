@@ -127,6 +127,8 @@ describe("products", () => {
     expect((await listProductsAdmin(deps, storeId, { tag: "t1" })).items).toHaveLength(3);
     expect((await listProductsAdmin(deps, storeId, { q: "sare" })).items).toHaveLength(7); // prefix
     expect((await listProductsAdmin(deps, storeId, { q: "SAR-3" })).items.map((p) => p.title)).toEqual(["Silk saree 3"]);
+    // Similar titles do not leak in when there is an exact match (typo fallback only when none).
+    expect((await listProductsAdmin(deps, storeId, { q: "Silk saree 3", sort: "title_asc" })).items.map((p) => p.title)).toEqual(["Silk saree 3"]);
     expect((await listProductsAdmin(deps, storeId, { q: "blok print" })).items.map((p) => p.title)).toEqual(["Block Print Tee"]); // trigram typo
   });
 

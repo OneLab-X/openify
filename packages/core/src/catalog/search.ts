@@ -2,7 +2,7 @@ import { and, eq, inArray, productTags, products, productVariants, sql, tags, ty
 import { Meilisearch } from "meilisearch";
 import type { CoreDeps } from "../deps.js";
 import { htmlToText } from "./html.js";
-import { productTextMatch, productTextRank } from "./text-search.js";
+import { productTextCondition, productTextRank } from "./text-search.js";
 
 /**
  * Storefront search backend (docs/prompts/02-catalog.md item 7). Postgres full-text + pg_trgm is
@@ -22,7 +22,8 @@ export function postgresSearch(db: Db): SearchEngine {
   return {
     id: "postgres",
     async search(storeId, q, { limit, offset }) {
-      const where = sql`p.store_id = ${storeId} and p.status = 'active' and ${productTextMatch(q)}`;
+      const scope = sql`p.store_id = ${storeId} and p.status = 'active'`;
+      const where = sql`${scope} and ${await productTextCondition(db, scope, q)}`;
       const [{ rows }, count] = await Promise.all([
         db.execute<{ id: string }>(sql`
           select p.id from products p where ${where}
