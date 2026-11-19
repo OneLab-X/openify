@@ -1,5 +1,13 @@
 {
   "extends": "@shopkit/config/tsconfig.node.json",
-  "compilerOptions": { "rootDir": ".", "noEmit": true },
-  "include": ["src", "test", "vitest.config.ts"]
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "src",
+    "test",
+    "vitest.config.ts"
+  ]
 }
