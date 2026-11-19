@@ -25,5 +25,7 @@ export default defineConfig({
     { name: "catalog", testMatch: /catalog\.spec\.ts/, dependencies: ["setup"], use: { ...devices["Desktop Chrome"] } },
     // Needs the e2e overlay (payment sandbox + Mailpit): COMPOSE_FILE=docker-compose.yml:docker-compose.e2e.yml
     { name: "checkout", testMatch: /checkout\.spec\.ts/, dependencies: ["catalog"], use: { ...devices["Desktop Chrome"] } },
+    // Phase 4: fulfilment, returns and gift cards on top of the checkout suite's orders.
+    { name: "operations", testMatch: /operations\.spec\.ts/, dependencies: ["checkout"], use: { ...devices["Desktop Chrome"] } },
   ],
 });

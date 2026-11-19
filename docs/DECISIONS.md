@@ -245,3 +245,69 @@ check with real test keys cover.
   approving leaves an uncaptured PayPal order).
 - Password reset emails for password accounts (sign in with a code instead).
 - A real-provider e2e spec (needs public webhook URLs); run the flow manually with test keys.
+
+## Phase 4 — merchant operations
+
+**D-043 · Discount engine is pure and Shopify-shaped.** `commerce/discount-engine.ts` takes priced lines, the
+shipping charge and candidate discounts (status, schedule, eligibility and usage limits already filtered by
+`discounts.ts`) and returns the best allowed combination with every amount allocated to lines. Classes follow
+Shopify: product (product/collection targets, buy X get Y), order and shipping; two discounts combine only when
+each allows the other's class. Product discounts apply first, order discounts on what remains, shipping last.
+Automatic discounts are discounts without a code. Usage is recorded per order and customer in the order
+transaction. Table-driven tests cover every kind and combination rule.
+
+**D-044 · Shipping zones.** A zone lists countries, optionally narrowed to states and PIN/postal prefixes; the most
+specific zone for the address wins (prefix > state > country > `*`). Rates: flat, by weight, by order value,
+carrier-calculated (live quote from the shipping adapter), local pickup at a location and local delivery by PIN
+prefix; any rate can be free over an amount. A store with no zones keeps the Phase 1 flat rate
+(`shipping.defaults`), so existing installs behave the same until they add zones.
+
+**D-045 · Fulfillments.** Partial and multi-location; each fulfillment records its lines, location and method
+(PLS methods: local driver with name/mobile/trip link, courier with AWB and an automatic tracking link for known
+couriers, other courier; plus carrier-booked shipments, pickup and none). Fulfilling moves stock from `committed`
+out of the location; cancelling a fulfillment reserves it again. "Send on WhatsApp" builds a `wa.me` link with
+the PLS message and records that it was used; staff press Send in WhatsApp (no WhatsApp API). Box labels (A6 and
+A4) are printed in the browser from the order view, as in PLS. Carrier tracking webhooks
+(`/api/webhooks/shipping/:provider`) are verified by the adapter, deduped by event id in
+`shipping_webhook_events`, and only move a fulfillment forward.
+
+**D-046 · Refunds and returns.** Refunds go through `PaymentProvider.refund` with our refund id as idempotency key;
+a refund the provider reports as pending counts only once confirmed (webhook or status), so `amount_refunded`
+always equals successful refund transactions. Gift-card-paid parts go back onto the cards. Returns: requested by
+the shopper (status page by signed link, or account) or created by staff → approved/declined → received
+(optionally restocked at a location) → closed with a refund, an exchange (a draft order credited with the
+returned value) or nothing. Fulfillment status becomes `returned` when every shipped unit came back.
+
+**D-047 · Invoices without a PDF library.** GST invoices are rendered by a ~130-line PDF 1.4 writer
+(`packages/core/src/pdf.ts`, Helvetica/WinAnsi, no embedded fonts) instead of adding pdfkit or a headless browser:
+invoices only need text and rules. The first request issues the number from a per-store sequence and freezes the
+data, so reprints never change. Totals come from the stored per-line tax split, so they equal the line taxes
+(CGST+SGST intra-state, IGST inter-state, HSN, GSTINs, place of supply, amount in Indian words).
+
+**D-048 · Gift cards.** Codes are shown once and stored as SHA-256 plus the last 4 characters; balances are a
+row-locked running total with a ledger row per change. Cards are debited when the order is created for payment
+and credited back if that order is re-priced, abandoned or refunded. A gift card product issues one card per unit
+when paid. An order fully covered by gift cards is placed with the internal `gift_card` method (no provider). The
+checkout view returns the codes the shopper entered (their own cart, `no-store`) so the page can remove one.
+
+**D-049 · Reports from orders, funnel from `analytics_daily`.** Sales figures use Shopify's definitions (gross →
+net → total) computed from placed orders in the store timezone; the conversion funnel reads `analytics_daily`,
+whose add-to-cart/checkout/order columns the worker recomputes for today and yesterday every 15 minutes
+(`analytics` queue, `ANALYTICS_ROLLUP_INTERVAL_MS`). Sessions and page views stay 0 until the Phase 5 storefront
+tracker writes them. CSV exports neutralise spreadsheet formulas.
+
+**D-050 · Staff.** Custom roles are permission sets from the fixed list in `auth/permissions.ts` (new in this
+phase: `orders:fulfill`, `orders:returns`, `discounts:*`, `gift_cards:*`, `reports:read`, `settings:tax`,
+`settings:security`); the owner role cannot be edited or assigned. Invitations are single-use hashed tokens valid
+7 days, emailed through the outbox; accepting creates the account with a strength-checked password. When the owner
+requires 2FA (they must have it on themselves first), every admin route answers 403
+`two_factor_required` for staff without it except `/me`, TOTP enrolment and sign-out, and the admin shows the
+enrolment screen. Changing someone's role or disabling them ends their sessions.
+
+**D-051 · Deferred within Phase 4.**
+- Polling carrier tracking for carriers without webhooks (status changes come from webhooks or staff).
+- Live carrier rate quotes in the fulfil dialog (the carrier books with its default service; checkout already
+  quotes live rates for carrier-calculated zones).
+- Selling gift cards to a different recipient from the storefront product page (the `Recipient email` line
+  attribute works through the API).
+- Order editing after placement and multi-currency (as in D-042).

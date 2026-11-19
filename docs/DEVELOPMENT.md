@@ -94,6 +94,18 @@ once and the confirmation email went once, then refunds through the provider.
 - Storefront writes need the `X-Shopkit-Client: storefront` header (CSRF); `apps/storefront/src/lib/shop-client.ts`
   adds it.
 
+## Operations (Phase 4)
+
+- Shipping zones, discounts and tax all price through `priceLines`; the discount engine
+  (`packages/core/src/commerce/discount-engine.ts`) is pure, so new rules get a row in
+  `packages/core/test/discount-engine.test.ts`.
+- Carrier tracking webhook URL: `https://<shop>/api/webhooks/shipping/<provider id>` (Shiprocket, Delhivery,
+  EasyPost). Courier tracking links for manual fulfillments: `packages/providers/src/shipping/couriers.ts`.
+- `analytics_daily` is refreshed every `ANALYTICS_ROLLUP_INTERVAL_MS` (default 15 min) for today and yesterday.
+- Staff invitations link to `/admin/invite/<token>`; with Mailpit (e2e overlay) the email lands at
+  `http://127.0.0.1:18025`.
+- e2e: the `operations` project depends on `checkout` (it fulfils and returns that suite's Razorpay order).
+
 ## API, SDK and OpenAPI
 
 Routes declare zod schemas; OpenAPI is generated from them. After changing a route:

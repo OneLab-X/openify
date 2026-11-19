@@ -2,7 +2,40 @@
 
 All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased] — Phase 3: cart, checkout, payments, orders, customers
+## [Unreleased] — Phase 4: merchant operations
+
+### Added
+- Schema: fulfillments and lines, shipping zones/countries/rates, carrier and shipping webhook events, returns and
+  lines, refund lines with shipping amount and status, gift cards and their ledger, tax rates and per-collection
+  overrides, invoices and sequences, `analytics_daily`, staff invitations, custom roles.
+- Discount engine: codes and automatic discounts; % off, fixed off (per order or per item), free shipping (with a
+  rate cap), buy X get Y; all/collections/products; minimum spend or quantity; customer and tag eligibility; total
+  and per-customer limits; schedule; Shopify-style combination classes. Table-driven tests.
+- Shipping: zones by country/state/PIN prefix; flat, weight, price, carrier-calculated, local pickup and local
+  delivery rates with free-over thresholds. Shiprocket, Delhivery and EasyPost adapters (rates, shipments, labels,
+  tracking webhooks at `/api/webhooks/shipping/:provider`).
+- Fulfillment: partial and multi-location; local driver, courier AWB with automatic tracking links, other
+  courier, carrier booking, pickup; tracking updates and delivered status with customer emails; "Send on
+  WhatsApp"; A6/A4 box labels (ported from PLS).
+- Refunds by line or amount with a server-side calculator, restock and shipping refunds; provider refunds count
+  once confirmed. Returns requested by shoppers (status page or account) or staff: approve/decline, receive with
+  restock, refund, exchange (draft order) or close.
+- Gift cards: issue (code shown once), sell as a product, redeem at checkout (whole order with no provider),
+  ledger, balance adjustments, disable/expiry.
+- Tax: GST tax-inclusive prices, GSTIN on store and optional on the buyer, region VAT/sales tax rates, collection
+  overrides, tax on shipping; GST invoice PDF per order.
+- Dashboard (PLS cards) and sales reports: sales, orders, AOV, returning customers, top products, by channel and
+  payment method, conversion funnel, period/year comparison, CSV exports. Worker `analytics` rollup job.
+- Staff: invitations with an accept page, custom roles with granular permissions, enforced 2FA, filtered audit log.
+- Admin pages for all of the above; storefront gift card field at checkout, shipments and return requests.
+- e2e `operations` project: fulfil, shopper return, receive and refund; gift card checkout.
+
+### Changed
+- Discount endpoints use `discounts:read`/`discounts:write` instead of the order permissions.
+- `GET /api/admin/settings` includes `security`; `PUT /settings/security.config` follows the same rule as
+  `PUT /api/admin/security` (you need 2FA yourself to require it).
+
+## Phase 3: cart, checkout, payments, orders, customers
 
 ### Added
 - Schema: carts, cart lines, checkouts, orders (financial / fulfillment / status split, per-store numbering),
