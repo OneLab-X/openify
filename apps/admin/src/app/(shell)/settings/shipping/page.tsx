@@ -20,6 +20,7 @@ export default async function ShippingSettings() {
   const currency = me.store.currency ?? "INR";
   return (
     <div className="grid gap-6">
+      <h2 className="text-xl font-semibold">Shipping & taxes</h2>
       <Card>
         <CardHeader>
           <CardTitle>Defaults</CardTitle>
