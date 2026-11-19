@@ -6,7 +6,7 @@ export function Header({ store }: { store: NonNullable<StorefrontStore["store"]>
     <header className="border-b border-border">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4">
         <Link href="/" className="flex items-center gap-2 font-semibold" style={{ color: store.brand.primaryColor }}>
-          {store.logoUrl ? <img src={store.logoUrl} alt="" className="h-8 w-auto" /> : null}
+          {store.logoUrl ? <img src={store.logoUrl} alt={`${store.name} logo`} className="h-8 w-auto" /> : null}
           <span>{store.name}</span>
         </Link>
         <form action="/search" role="search" className="flex">

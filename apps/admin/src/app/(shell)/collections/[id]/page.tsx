@@ -7,8 +7,8 @@ import { requireMe } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Edit collection" };
 
-export default async function EditCollectionPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export default async function EditCollectionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
+  const [{ id }, { saved }] = await Promise.all([params, searchParams]);
   const me = await requireMe();
   const api = await serverApi();
   const { data } = await api.GET("/api/admin/collections/{id}", { params: { path: { id } } });
@@ -19,7 +19,12 @@ export default async function EditCollectionPage({ params }: { params: Promise<{
         <Link href="/collections" className="text-sm text-muted-foreground hover:underline">← Collections</Link>
         <h1 className="text-2xl font-semibold">{data.title}</h1>
       </div>
-      <CollectionEditor key={data.updatedAt} collection={data} currency={me.store.currency ?? "USD"} />
+      <CollectionEditor
+        key={data.updatedAt}
+        collection={data}
+        currency={me.store.currency ?? "USD"}
+        {...(saved ? { flash: `Collection saved (${data.productsCount} products).` } : {})}
+      />
     </div>
   );
 }

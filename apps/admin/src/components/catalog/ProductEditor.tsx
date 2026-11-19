@@ -59,7 +59,9 @@ export function ProductEditor({
   weightUnit,
   locations,
   facets,
+  flash,
 }: {
+  flash?: string;
   product: Product | null;
   currency: string;
   weightUnit: "kg" | "g" | "lb" | "oz";
@@ -109,7 +111,7 @@ export function ProductEditor({
   });
   const [bulkPrice, setBulkPrice] = useState("");
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string; details?: string[] } | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string; details?: string[] } | null>(flash ? { ok: true, text: flash } : null);
 
   const combos = useMemo(() => cartesian(options), [options]);
   const blank = (): VariantDraft => {
@@ -237,7 +239,7 @@ export function ProductEditor({
       return;
     }
     setMsg({ ok: true, text: "Product saved." });
-    if (!product) router.replace(`/products/${res.data.id}`);
+    if (!product) router.replace(`/products/${res.data.id}?saved=1`);
     else {
       setHandle(res.data.handle);
       setRows((r) => {

@@ -7,8 +7,8 @@ import { requireMe } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Edit product" };
 
-export default async function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export default async function EditProductPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
+  const [{ id }, { saved }] = await Promise.all([params, searchParams]);
   const me = await requireMe();
   const api = await serverApi();
   const [product, locations, facets] = await Promise.all([
@@ -26,6 +26,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
       <ProductEditor
         key={product.data.updatedAt}
         product={product.data}
+        {...(saved ? { flash: "Product saved." } : {})}
         currency={product.data.currency}
         weightUnit={me.store.weightUnit ?? "kg"}
         locations={locations.data ?? []}

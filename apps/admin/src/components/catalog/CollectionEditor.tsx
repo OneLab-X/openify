@@ -45,7 +45,7 @@ const SORTS: [string, string][] = [
   ["created_asc", "Oldest"],
 ];
 
-export function CollectionEditor({ collection, currency }: { collection: Collection | null; currency: string }) {
+export function CollectionEditor({ collection, currency, flash }: { collection: Collection | null; currency: string; flash?: string }) {
   const router = useRouter();
   const [title, setTitle] = useState(collection?.title ?? "");
   const [handle, setHandle] = useState(collection?.handle ?? "");
@@ -66,7 +66,7 @@ export function CollectionEditor({ collection, currency }: { collection: Collect
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<ProductRef[]>([]);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(flash ? { ok: true, text: flash } : null);
 
   async function find() {
     const { data } = await api.GET("/api/admin/products", { params: { query: { q: search, limit: 20 } } });
@@ -110,7 +110,7 @@ export function CollectionEditor({ collection, currency }: { collection: Collect
     setSaving(false);
     if (!res.data) return setMsg({ ok: false, text: errorMessage(res.error) });
     setMsg({ ok: true, text: `Collection saved (${res.data.productsCount} products).` });
-    if (!collection) router.replace(`/collections/${res.data.id}`);
+    if (!collection) router.replace(`/collections/${res.data.id}?saved=1`);
     else router.refresh();
   }
 
