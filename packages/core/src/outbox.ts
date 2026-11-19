@@ -1,6 +1,20 @@
 import { outboxEvents, sql, type Db, type Executor } from "@shopkit/db";
 
-export const OUTBOX_EVENT_TYPES = ["store.launched", "store.updated", "media.created", "email.requested"] as const;
+export const OUTBOX_EVENT_TYPES = [
+  "store.launched",
+  "store.updated",
+  "media.created",
+  "media.processed",
+  "media.deleted",
+  "email.requested",
+  "product.created",
+  "product.updated",
+  "product.deleted",
+  "collection.created",
+  "collection.updated",
+  "collection.deleted",
+  "job.requested",
+] as const;
 export type OutboxEventType = (typeof OUTBOX_EVENT_TYPES)[number];
 
 export interface OutboxEvent {

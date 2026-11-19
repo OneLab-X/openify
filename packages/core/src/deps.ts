@@ -2,6 +2,7 @@ import type { Keyring } from "@shopkit/crypto";
 import type { Db } from "@shopkit/db";
 import type { ProviderRegistry, ProviderRuntime } from "@shopkit/providers";
 import type { Redis } from "ioredis";
+import type { SearchEngine } from "./catalog/search.js";
 
 export interface Logger {
   info(obj: object | string, msg?: string): void;
@@ -17,6 +18,8 @@ export interface CoreDeps {
   registry: ProviderRegistry;
   runtime: ProviderRuntime;
   logger: Logger;
+  /** External storefront search engine (Meilisearch); Postgres full-text is used when absent. */
+  search?: SearchEngine;
   now?: () => Date;
 }
 

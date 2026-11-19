@@ -205,7 +205,7 @@ export const collectionSort = pgEnum("collection_sort", [
 ]);
 
 export interface CollectionRule {
-  field: "tag" | "title" | "type" | "vendor" | "price" | "compare_at_price" | "inventory" | "weight";
+  field: "tag" | "title" | "type" | "vendor" | "price" | "compare_at_price" | "inventory";
   relation: "equals" | "not_equals" | "starts_with" | "ends_with" | "contains" | "not_contains" | "greater_than" | "less_than";
   value: string;
 }

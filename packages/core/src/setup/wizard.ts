@@ -231,8 +231,10 @@ export async function saveShippingTaxStep(deps: CoreDeps, actor: Actor, input: z
   await deps.db.transaction(async (tx) => {
     if (!skip) {
       const body = shippingTaxInput.parse(input);
-      await tx.delete(locations).where(and(eq(locations.storeId, storeId), eq(locations.isDefault, true)));
-      await tx.insert(locations).values({ storeId, name: body.shipFrom.name, address: body.shipFrom.address, isDefault: true });
+      // Update in place: inventory levels reference the location (deleting it would drop stock).
+      const [current] = await tx.select({ id: locations.id }).from(locations).where(and(eq(locations.storeId, storeId), eq(locations.isDefault, true)));
+      if (current) await tx.update(locations).set({ name: body.shipFrom.name, address: body.shipFrom.address }).where(eq(locations.id, current.id));
+      else await tx.insert(locations).values({ storeId, name: body.shipFrom.name, address: body.shipFrom.address, isDefault: true });
       await setSetting(tx, storeId, "shipping.defaults", {
         zoneName: body.zone.name,
         countries: body.zone.countries,

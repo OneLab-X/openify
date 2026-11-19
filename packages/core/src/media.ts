@@ -9,6 +9,8 @@ import { enqueueEvent } from "./outbox.js";
 import { getSetting } from "./settings.js";
 
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+/** Product/collection images and CSV files (the API's multipart limit). */
+export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
 /** Content sniffing: trust the bytes, not the browser's Content-Type. SVG is refused (script risk). */
 export function sniffImage(data: Buffer): { contentType: string; ext: string } | null {
@@ -18,10 +20,11 @@ export function sniffImage(data: Buffer): { contentType: string; ext: string } |
   if (at(0, [0x52, 0x49, 0x46, 0x46]) && at(8, [0x57, 0x45, 0x42, 0x50])) return { contentType: "image/webp", ext: "webp" };
   if (at(0, [0x47, 0x49, 0x46, 0x38])) return { contentType: "image/gif", ext: "gif" };
   if (at(0, [0x00, 0x00, 0x01, 0x00])) return { contentType: "image/x-icon", ext: "ico" };
+  if (at(4, [0x66, 0x74, 0x79, 0x70]) && (at(8, [0x61, 0x76, 0x69, 0x66]) || at(8, [0x61, 0x76, 0x69, 0x73]))) return { contentType: "image/avif", ext: "avif" };
   return null;
 }
 
-async function activeStorage(deps: CoreDeps, storeId: string) {
+export async function activeStorage(deps: CoreDeps, storeId: string) {
   const active = await getSetting(deps.db, storeId, "storage.active");
   const provider = await loadProvider(deps, { storeId, kind: "storage", provider: active.provider, mode: active.mode });
   if (!provider) throw new AppError("bad_request", "Storage is not configured");
@@ -78,13 +81,39 @@ export async function uploadBrandAsset(
 /** Streams a public media object for the /media proxy. */
 export type MediaRead = { redirect: string } | { object: StoredObject; contentType: string };
 
-export async function readMedia(deps: CoreDeps, mediaId: string): Promise<MediaRead | null> {
+const RENDITION_RE = /^w(\d{2,4})\.(webp|avif)$/;
+
+/**
+ * Resolves `/media/<id>/<file>`: the original (any file name, for stable URLs) or a rendition
+ * (`w640.webp`). Redirects to the provider's public URL when one exists, else streams the object.
+ */
+export async function readMedia(deps: CoreDeps, mediaId: string, filename?: string): Promise<MediaRead | null> {
   const [row] = await deps.db.select().from(media).where(and(eq(media.id, mediaId), eq(media.visibility, "public")));
-  if (!row) return null;
+  if (!row || row.status !== "ready") return null;
+  let key = row.storageKey;
+  let contentType = row.contentType;
+  const m = filename ? RENDITION_RE.exec(filename) : null;
+  if (m) {
+    const r = row.renditions.find((x) => x.width === Number(m[1]) && x.format === m[2]);
+    if (!r) return null;
+    key = r.key;
+    contentType = `image/${r.format}`;
+  }
   const provider = await loadProvider(deps, { storeId: row.storeId, kind: "storage", provider: row.storageProvider, mode: "live" });
   if (!provider) return null;
-  const direct = provider.publicUrl(row.storageKey);
+  const direct = provider.publicUrl(key);
   if (direct) return { redirect: direct };
-  const object = await provider.get(row.storageKey);
-  return object ? { object, contentType: row.contentType } : null;
+  const object = await provider.get(key);
+  return object ? { object, contentType } : null;
+}
+
+/** Streams an object for a verified `/media/s/<store>/<provider>/<key>` signed URL. */
+export async function readSignedObject(deps: CoreDeps, storeId: string, providerId: string, key: string): Promise<StoredObject | null> {
+  const provider = await loadProvider(deps, { storeId, kind: "storage", provider: providerId, mode: "live" });
+  if (!provider) return null;
+  try {
+    return await provider.get(key);
+  } catch {
+    return null;
+  }
 }

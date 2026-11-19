@@ -3,7 +3,7 @@ import type { CoreDeps } from "./deps.js";
 import type { EmailJob } from "./emails/deliver.js";
 import type { OutboxEvent } from "./outbox.js";
 
-export const QUEUES = ["outbox", "webhooks-out", "email", "images", "analytics", "revalidate"] as const;
+export const QUEUES = ["outbox", "webhooks-out", "email", "images", "analytics", "revalidate", "search-index", "imports", "media-migration"] as const;
 export type QueueName = (typeof QUEUES)[number];
 
 export interface RoutedJob {
@@ -46,10 +46,40 @@ export async function routeOutboxEvent(deps: CoreDeps, event: OutboxEvent): Prom
     case "store.updated":
       return [revalidate(event, ["store"])];
     case "media.created":
+      if (event.payload.altOnly) return [revalidate(event, ["store", "products", "collections"])];
       return [
         { queue: "images", name: "process", data: { storeId: event.storeId, ...event.payload }, jobId: `${event.id}-images` },
         revalidate(event, ["store"]),
       ];
+    case "media.processed":
+      return [revalidate(event, ["store", "products", "collections"])];
+    case "media.deleted":
+      return [{ queue: "images", name: "delete", data: { storeId: event.storeId, ...event.payload }, jobId: `${event.id}-images` }];
+    case "product.created":
+    case "product.updated":
+    case "product.deleted": {
+      const { productId, handle, previousHandle } = event.payload as { productId: string; handle?: string; previousHandle?: string | null };
+      const tags = ["products", "collections", `product:${productId}`];
+      if (handle) tags.push(`product-handle:${handle}`);
+      if (previousHandle) tags.push(`product-handle:${previousHandle}`);
+      return [
+        revalidate(event, tags),
+        { queue: "search-index", name: "sync", data: { storeId: event.storeId, productIds: [productId] }, jobId: `${event.id}-search` },
+      ];
+    }
+    case "collection.created":
+    case "collection.updated":
+    case "collection.deleted": {
+      const { collectionId, handle, previousHandle } = event.payload as { collectionId: string; handle?: string; previousHandle?: string | null };
+      const tags = ["collections", `collection:${collectionId}`];
+      if (handle) tags.push(`collection-handle:${handle}`);
+      if (previousHandle) tags.push(`collection-handle:${previousHandle}`);
+      return [revalidate(event, tags)];
+    }
+    case "job.requested": {
+      const { jobId, jobType } = event.payload as { jobId: string; jobType: string };
+      return [{ queue: jobType === "media_migration" ? "media-migration" : "imports", name: jobType, data: { storeId: event.storeId, jobId }, jobId: `job-${jobId}` }];
+    }
     case "email.requested":
       return [{ queue: "email", name: "requested", data: { ...event.payload }, jobId: `${event.id}-email` }];
     default:
