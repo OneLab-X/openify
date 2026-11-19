@@ -57,22 +57,42 @@ Mailpit http://localhost:8025 (use SMTP host `mailpit`, port `1025` in the wizar
 
 ## End-to-end tests
 
-The e2e suite drives the production stack from an empty volume:
+The e2e suite drives the production stack from an empty volume, with the e2e overlay that adds a local payment
+sandbox (fake Razorpay + Stripe APIs, widgets and signed webhooks) and Mailpit:
 
 ```bash
+export COMPOSE_FILE=docker-compose.yml:docker-compose.e2e.yml
 docker compose down -v && rm -f .env
 SHOPKIT_DOMAIN=localhost ./scripts/install.sh      # add SHOPKIT_HTTPS_PORT=8443 if 443 is taken
 pnpm --filter @shopkit/e2e exec playwright install chromium
 E2E_BASE_URL=https://localhost pnpm e2e            # or https://localhost:8443
 ```
 
+The overlay publishes the sandbox on `127.0.0.1:14200` (`/_events`, `/_orders`) and Mailpit on
+`127.0.0.1:18025`; override with `SANDBOX_HOST_PORT` / `MAILPIT_HOST_PORT`. Never deploy the overlay.
+
 The `setup` project (wizard) runs first; the `catalog` project depends on the store it launches (product with
 2 options × 6 variants × 4 images visible on the storefront within 5 s, 500-product Shopify CSV import and
 idempotent re-import, collections, filters, search, inventory, bulk actions). Run one project with
-`pnpm e2e --project=catalog` only against a stack where the wizard has already completed.
+`pnpm e2e --project=catalog` only against a stack where the wizard has already completed. The `checkout`
+project buys with Razorpay and Stripe test mode through the sandbox, replays their webhooks, checks stock moved
+once and the confirmation email went once, then refunds through the provider.
 
 ```bash
 ```
+
+## Checkout and payments
+
+- Pricing lives in `packages/core/src/commerce/pricing.ts`; every surface calls it. Never accept an amount
+  from a request body.
+- Payment adapters must pass `packages/providers/test/payment-contract.test.ts` (fixtures in
+  `test/fixtures/payments/<provider>/`). Add a harness entry for a new adapter.
+- Webhook URL for a provider: `https://<shop>/api/webhooks/payments/<provider id>` (shown in Settings → Payments).
+- Unpaid checkouts hold stock for `checkout.config.reservationMinutes` (default 30); the `inventory-release`
+  queue frees it. Abandoned-checkout reminders: Settings → Notifications (delay, on/off); the worker scans every
+  `ABANDONED_SCAN_INTERVAL_MS` (default 60 s).
+- Storefront writes need the `X-Shopkit-Client: storefront` header (CSRF); `apps/storefront/src/lib/shop-client.ts`
+  adds it.
 
 ## API, SDK and OpenAPI
 

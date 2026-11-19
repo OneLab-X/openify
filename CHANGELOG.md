@@ -2,7 +2,36 @@
 
 All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased] — Phase 2: catalog and media
+## [Unreleased] — Phase 3: cart, checkout, payments, orders, customers
+
+### Added
+- Schema: carts, cart lines, checkouts, orders (financial / fulfillment / status split, per-store numbering),
+  order lines, order events, transactions, payment sessions, payment webhook events, refunds, draft orders,
+  customers, addresses, tags, basic discount codes and usages, email delivery log.
+- One pricing service for cart, checkout, orders and drafts (discount allocation, flat-rate shipping, GST
+  CGST/SGST/IGST or generic tax, inclusive or exclusive prices).
+- Payment adapters: Stripe (Payment Intents), PayPal (Orders v2), Cashfree, PhonePe (Standard Checkout v2),
+  manual bank transfer; Razorpay wired to checkout. Shared payment contract suite with recorded fixtures.
+- Checkout flow per SPEC §7: server-priced payment session, stock reserved with a delayed release, widget or
+  redirect, verified return, webhook as source of truth (deduped by event id), offline methods place the order.
+- Orders admin: list with filters, detail with timeline, staff comments, tags/notes, payments, mark as paid,
+  refunds through the provider (with restock), cancel with restock/refund, shipping-update email. Draft orders
+  and manual order creation. Customers list (lifetime value) and detail. Basic discount codes.
+- Customer accounts: email code (default) or password, cart merge at sign-in, addresses, order history,
+  marketing consent.
+- Emails (React Email render, outbox → email queue, once per order + template): order confirmation, payment
+  failed, cancelled, shipping update, refund, sign-in code, abandoned checkout; staff alerts for new and paid
+  orders. Subjects and intros editable in Settings → Notifications; checkout settings page.
+- Storefront: add to cart, cart page, one-page checkout, return page, thank-you/order status page by signed
+  link, account pages.
+- Worker: `inventory-release` delayed jobs and the `abandoned-cart` repeatable scan.
+- e2e: `docker-compose.e2e.yml` (payment sandbox + Mailpit) and the checkout suite.
+
+### Changed
+- Email jobs are de-duplicated by an `email_deliveries` row instead of a Redis key.
+- Stripe, PayPal, Cashfree, PhonePe and bank transfer are no longer "coming soon" in the setup wizard.
+
+## Phase 2: catalog and media
 
 ### Added
 - Catalog schema: products, options/values, variants (price, compare-at, cost, SKU, barcode, weight, shipping,

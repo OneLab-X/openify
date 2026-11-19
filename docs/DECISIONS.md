@@ -174,3 +174,74 @@ GCS and Drive take the service-account key file as a write-only secret.
 - Metafields on the Storefront API (admin only for now) and metafield CSV columns.
 - Deleting objects from the old provider after a media migration.
 - A Meilisearch service in `docker-compose.dev.yml` (use the production profile or point `MEILISEARCH_URL` at one).
+
+## Phase 3 — cart, checkout, payments, orders, customers
+
+**D-033 · One pricing function.** `packages/core/src/commerce/pricing.ts` (`priceLines`) prices carts,
+checkouts, order creation and draft orders. It reads variants, stock, the discount code, `shipping.defaults` and
+`tax.config` from the database; the browser only sends variant ids, quantities and choices. Order discounts are
+allocated to lines (largest remainder) before tax; tax is per line, rounded half away from zero; GST splits into
+CGST+SGST when the shipping state equals `registeredState`, else IGST. Tax on shipping is opt-in
+(`tax.config.taxShipping`). Shipping uses the single flat rate from setup until Phase 4 adds zones.
+
+**D-034 · Orders exist before payment, numbers do not.** The payment-session call creates the order row
+(`placed_at` null, no number) so providers can reference it (SPEC §7 step 1), and reserves stock: Shopify
+semantics, `available −q, committed +q`, once. The order gets its number (`order_sequences`, prefix from
+`checkout.config.orderPrefix`) only when placed — paid online, or confirmed for COD/bank transfer — so unpaid
+attempts never burn numbers. An unplaced order whose reservation expired is an abandoned checkout, not an order.
+A payment that arrives after the reservation was released re-reserves (it may oversell) and is flagged in the
+timeline. Payments that do not match the total are recorded and flagged (`payment_mismatch`), never treated as
+full payment.
+
+**D-035 · Payment idempotency.** Webhooks: signature on the raw body, then the provider event id is inserted into
+`payment_webhook_events` in the same transaction that applies it; a duplicate insert is a no-op. Transactions are
+unique per (store, provider, kind, provider payment/refund id), so a browser return and a webhook for the same
+payment record it once. Cashfree and PhonePe send no event id; the adapter builds one from the object id and its
+new state. Refunds pass our refund id as the provider idempotency key where supported.
+
+**D-036 · Extra tables.** `payment_sessions` (every provider session per order, so late webhooks for an earlier
+session still find the order), `order_sequences`, `email_deliveries` (one row per idempotency key, claimed before
+sending — the email job sends each order+template once even when retried; replaces Phase 1's Redis marker) and
+`draft_orders`. Abandoned checkouts are `checkouts.abandoned_notified_at`, not a separate table. Customer
+sessions live in Redis like staff sessions; there is no `customer_sessions` table.
+
+**D-037 · Provider interface additions.** `ProviderDefinition.paymentFlow` (`widget` | `redirect` | `offline`)
+tells checkout how to open a method; `PaymentProvider.refund` takes an optional idempotency key;
+`ProviderRuntime.paymentSandbox` lets test-mode adapters call a local sandbox (e2e only; live mode ignores it).
+Stripe, PayPal, Cashfree and PhonePe are implemented over `fetch` (no SDKs), like Razorpay. PayPal webhooks are
+verified with PayPal's `verify-webhook-signature` API (needs the webhook id in config). PhonePe returns without
+parameters, so its return is verified by a server-to-server status lookup of the stored merchant order id.
+Cashfree needs a 10-digit phone number.
+
+**D-038 · Storefront CSRF by custom header.** Cart, checkout and account endpoints are cookie-authenticated;
+every mutating request must send `X-Shopkit-Client: storefront`, which a cross-site form cannot send without a
+CORS preflight (the API grants none). Staff routes keep their CSRF token.
+
+**D-039 · Customer accounts.** Email one-time codes (6 digits, 10 minutes, 5 attempts, 5 sends per address per
+hour) are the default and create the account on first sign-in; `checkout.config.customerAuth = "password"` adds
+password sign-in/registration (codes still work). Every placed order is linked to a customer record (created for
+guests, like Shopify) so lifetime value and order history work; marketing consent is only ever switched on by a
+checkout. Carts merge at sign-in (quantities add up). The OTP code travels in the outbox payload to the email job.
+
+**D-040 · Emails.** React Email's component package is deprecated, so templates are plain JSX (tables, inline
+styles) rendered with `@react-email/render`. Merchants can edit subject and intro and switch off any template
+except the sign-in code (Settings → Notifications). Abandoned-checkout reminders come from a repeatable scan
+(`abandoned-cart` queue, every minute) that marks and enqueues in one transaction, rather than a delayed job per
+checkout, so changing the delay applies to open checkouts too. The same scan sweeps expired reservations in case
+a delayed `inventory-release` job was lost.
+
+**D-041 · Payment e2e uses a local sandbox.** `docker-compose.e2e.yml` adds `payments-sandbox` (a dependency-free
+Node server that mimics the Razorpay and Stripe endpoints Shopkit calls, their browser scripts, and signed
+webhooks) and Mailpit. With `PAYMENT_SANDBOX_URL` set, test-mode Razorpay/Stripe/PayPal/Cashfree/PhonePe calls go
+there. This proves our flow (server pricing, widget/redirect, verify, webhook, idempotency) offline; it does not
+prove compatibility with the real providers' current APIs, which the recorded-fixture contract tests and a manual
+check with real test keys cover.
+
+**D-042 · Deferred within Phase 3.**
+- Fulfillments, shipping zones/carriers, returns, the full discount engine, tax overrides (Phase 4). "Shipping
+  update" is a staff action that records a timeline event and emails tracking details.
+- Gift cards, free (zero-total) orders, multi-currency, order editing after placement.
+- PayPal capture on `CHECKOUT.ORDER.APPROVED` webhooks (the return captures; a shopper who closes the tab after
+  approving leaves an uncaptured PayPal order).
+- Password reset emails for password accounts (sign in with a code instead).
+- A real-provider e2e spec (needs public webhook URLs); run the flow manually with test keys.
