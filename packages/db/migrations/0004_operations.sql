@@ -304,3 +304,12 @@ CREATE UNIQUE INDEX "staff_invites_token_uq" ON "staff_invites" USING btree ("to
 CREATE INDEX "staff_invites_store_idx" ON "staff_invites" USING btree ("store_id","created_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "discounts_automatic_idx" ON "discounts" USING btree ("store_id") WHERE "discounts"."method" = 'automatic' and "discounts"."status" = 'active';--> statement-breakpoint
 UPDATE "discounts" SET "usage_limit_per_customer" = 1 WHERE "once_per_customer";
+--> statement-breakpoint
+INSERT INTO "role_permissions" ("store_id", "role_id", "permission")
+SELECT r."store_id", r."id", p FROM "roles" r
+CROSS JOIN unnest(ARRAY['orders:fulfill','orders:returns','discounts:read','discounts:write','gift_cards:read','gift_cards:write','reports:read','settings:tax']) AS p
+WHERE r."key" = 'admin' ON CONFLICT DO NOTHING;--> statement-breakpoint
+INSERT INTO "role_permissions" ("store_id", "role_id", "permission")
+SELECT r."store_id", r."id", p FROM "roles" r
+CROSS JOIN unnest(ARRAY['orders:fulfill','orders:returns','discounts:read','gift_cards:read','reports:read']) AS p
+WHERE r."key" = 'staff' ON CONFLICT DO NOTHING;

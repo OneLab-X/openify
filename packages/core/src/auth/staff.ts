@@ -6,6 +6,7 @@ import type { Actor, CoreDeps } from "../deps.js";
 import { now } from "../deps.js";
 import { AppError, unauthorized } from "../errors.js";
 import { openJson, sealJson, totpAad } from "../secrets.js";
+import { getSetting } from "../settings.js";
 import { getStore } from "../stores.js";
 import { assertStrongPassword, hashPassword, verifyDummy, verifyPassword } from "./password.js";
 import { SYSTEM_ROLES, type SystemRole } from "./permissions.js";
@@ -51,6 +52,8 @@ export async function staffView(db: Executor, staff: StaffRow) {
     roleName: role?.name ?? "Staff",
     permissions: await permissionsFor(db, staff.roleId),
     totpEnabled: staff.totpEnabled,
+    /** The store requires 2FA and this account has not set it up (Phase 4). */
+    twoFactorSetupRequired: !staff.totpEnabled && (await getSetting(db, staff.storeId, "security.config")).requireTwoFactor,
     lastLoginAt: staff.lastLoginAt?.toISOString() ?? null,
   };
 }
@@ -176,6 +179,7 @@ export async function confirmTotpEnrollment(deps: CoreDeps, actor: Actor, storeI
 export async function disableTotp(deps: CoreDeps, actor: Actor, storeId: string, staffId: string, password: string, currentToken?: string) {
   const staff = await getStaff(deps.db, storeId, staffId);
   if (!staff || !(await verifyPassword(staff.passwordHash, password))) throw unauthorized("Password is incorrect");
+  if ((await getSetting(deps.db, storeId, "security.config")).requireTwoFactor) throw new AppError("conflict", "Your store requires two-factor authentication");
   await deps.db.transaction(async (tx) => {
     await tx.update(staffUsers).set({ totpEnabled: false, totpSecret: null, totpLastStep: null }).where(eq(staffUsers.id, staffId));
     await writeAudit(tx, actor, { storeId, action: "staff.totp_disabled", resourceType: "staff_user", resourceId: staffId });

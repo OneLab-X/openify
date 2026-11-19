@@ -6,6 +6,13 @@ export const PERMISSIONS = [
   "orders:read",
   "orders:write",
   "orders:refund",
+  "orders:fulfill",
+  "orders:returns",
+  "discounts:read",
+  "discounts:write",
+  "gift_cards:read",
+  "gift_cards:write",
+  "reports:read",
   "customers:read",
   "customers:write",
   "content:write",
@@ -17,6 +24,8 @@ export const PERMISSIONS = [
   "settings:email",
   "settings:analytics",
   "settings:shipping",
+  "settings:tax",
+  "settings:security",
   "settings:staff",
   "audit:read",
 ] as const;
@@ -28,7 +37,7 @@ export const SYSTEM_ROLES: Record<SystemRole, { name: string; permissions: reado
   owner: { name: "Owner", permissions: ["*"] },
   admin: {
     name: "Admin",
-    permissions: PERMISSIONS.filter((p) => p !== "settings:staff" && p !== "settings:payments"),
+    permissions: PERMISSIONS.filter((p) => p !== "settings:staff" && p !== "settings:payments" && p !== "settings:security"),
   },
   staff: {
     name: "Staff",
@@ -38,6 +47,11 @@ export const SYSTEM_ROLES: Record<SystemRole, { name: string; permissions: reado
       "products:write",
       "orders:read",
       "orders:write",
+      "orders:fulfill",
+      "orders:returns",
+      "discounts:read",
+      "gift_cards:read",
+      "reports:read",
       "customers:read",
       "customers:write",
       "content:write",
@@ -49,3 +63,17 @@ export const SYSTEM_ROLES: Record<SystemRole, { name: string; permissions: reado
 export function hasPermission(granted: readonly string[], required: Permission): boolean {
   return granted.includes("*") || granted.includes(required);
 }
+
+/** Grouped for the role editor. */
+export const PERMISSION_GROUPS: { label: string; permissions: Permission[] }[] = [
+  { label: "Home & reports", permissions: ["home:read", "analytics:read", "reports:read"] },
+  { label: "Products", permissions: ["products:read", "products:write"] },
+  { label: "Orders", permissions: ["orders:read", "orders:write", "orders:fulfill", "orders:returns", "orders:refund"] },
+  { label: "Customers", permissions: ["customers:read", "customers:write"] },
+  { label: "Discounts & gift cards", permissions: ["discounts:read", "discounts:write", "gift_cards:read", "gift_cards:write"] },
+  { label: "Content", permissions: ["content:write"] },
+  {
+    label: "Settings",
+    permissions: ["settings:read", "settings:general", "settings:storage", "settings:payments", "settings:email", "settings:analytics", "settings:shipping", "settings:tax", "settings:staff", "settings:security", "audit:read"],
+  },
+];

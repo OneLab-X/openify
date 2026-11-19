@@ -43,6 +43,8 @@ export const SETTINGS = {
     alertNewOrder: z.boolean(),
     alertPaidOrder: z.boolean(),
   }),
+  /** Staff security (Phase 4): require every staff member to use two-factor sign-in. */
+  "security.config": z.object({ requireTwoFactor: z.boolean() }),
   /** Per-template overrides edited in Settings → Notifications. */
   "notifications.templates": z.record(
     z.string(),
@@ -62,6 +64,7 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   "checkout.config": { reservationMinutes: 30, orderPrefix: "#", requirePhone: false, customerAuth: "otp" },
   "notifications.config": { abandonedCheckoutEnabled: true, abandonedCheckoutDelayMinutes: 60, merchantEmails: [], alertNewOrder: true, alertPaidOrder: true },
   "notifications.templates": {},
+  "security.config": { requireTwoFactor: false },
 };
 
 export async function getSetting<K extends SettingKey>(db: Executor, storeId: string, key: K): Promise<SettingValue<K>> {
