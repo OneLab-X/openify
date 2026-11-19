@@ -1,4 +1,4 @@
-import { getSetupStatus, issueSetupToken, rotateKeys, verifyKeys } from "@shopkit/core";
+import { getInstallStore, getSetupStatus, issueSetupToken, rotateKeys, verifyKeys } from "@shopkit/core";
 import { runMigrations } from "@shopkit/db";
 import { loadConfig } from "./config.js";
 import { buildDeps } from "./deps.js";
@@ -10,8 +10,9 @@ import { createLogger } from "./logger.js";
  *   keys:verify             decrypt every stored secret with the loaded keyring
  *   keys:rotate --to <v>    re-wrap every DEK with master key version <v>
  *   setup:token             issue a new setup token while setup is still required
+ *   search:reindex          rebuild the Meilisearch index (when MEILISEARCH_URL is set)
  */
-const USAGE = "usage: shopkit <db:migrate | keys:verify | keys:rotate --to <version> | setup:token>";
+const USAGE = "usage: shopkit <db:migrate | keys:verify | keys:rotate --to <version> | setup:token | search:reindex>";
 
 export async function main(argv: string[], out: (line: string) => void = (l) => process.stdout.write(`${l}\n`)): Promise<number> {
   const [command, ...rest] = argv;
@@ -22,7 +23,7 @@ export async function main(argv: string[], out: (line: string) => void = (l) => 
     out("migrations applied");
     return 0;
   }
-  if (!command || !["keys:verify", "keys:rotate", "setup:token"].includes(command)) {
+  if (!command || !["keys:verify", "keys:rotate", "setup:token", "search:reindex"].includes(command)) {
     out(USAGE);
     return 2;
   }
@@ -45,6 +46,15 @@ export async function main(argv: string[], out: (line: string) => void = (l) => 
       const result = await rotateKeys(deps, to);
       out(`re-wrapped ${result.credentials} credential(s) and ${result.totp} TOTP secret(s) to key version ${to}`);
       out(`set SHOPKIT_MASTER_KEY_VERSION=${to}, restart, run keys:verify, then remove old keys`);
+      return 0;
+    }
+    if (command === "search:reindex") {
+      const store = await getInstallStore(deps.db);
+      if (!deps.search || !store) {
+        out(deps.search ? "no store yet" : "MEILISEARCH_URL is not set; Postgres search needs no index");
+        return 1;
+      }
+      out(`indexed ${await deps.search.reindex(store.id)} active product(s) in ${deps.search.id}`);
       return 0;
     }
     const status = await getSetupStatus(deps);

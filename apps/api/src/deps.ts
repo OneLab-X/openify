@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import type { CoreDeps, Logger } from "@shopkit/core";
+import { meiliSearch, type CoreDeps, type Logger } from "@shopkit/core";
 import { loadKeyring } from "@shopkit/crypto";
 import { createDb } from "@shopkit/db";
 import { createDefaultRegistry } from "@shopkit/providers";
@@ -25,6 +25,7 @@ export function buildDeps(config: Config, logger: Logger, env: Record<string, st
       signingSecret: config.SESSION_SECRET,
     },
     logger,
+    ...(config.MEILISEARCH_URL ? { search: meiliSearch(handle.db, { url: config.MEILISEARCH_URL, apiKey: config.MEILISEARCH_API_KEY }) } : {}),
     async close() {
       redis.disconnect();
       await handle.close();

@@ -3,7 +3,8 @@ import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
-import { MAX_IMAGE_BYTES } from "@shopkit/core";
+import { MAX_UPLOAD_BYTES } from "@shopkit/core";
+import { safeEqual } from "@shopkit/crypto";
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from "fastify";
 import { jsonSchemaTransform, jsonSchemaTransformObject, serializerCompiler, validatorCompiler, type ZodTypeProvider } from "fastify-type-provider-zod";
 import type { Config } from "./config.js";
@@ -11,6 +12,7 @@ import type { AppDeps } from "./deps.js";
 import { registerErrorHandler } from "./plugins/errors.js";
 import { adminRoutes } from "./routes/admin.js";
 import { authRoutes } from "./routes/auth.js";
+import { catalogRoutes } from "./routes/catalog.js";
 import { healthRoutes } from "./routes/health.js";
 import { mediaRoutes } from "./routes/media.js";
 import { setupRoutes } from "./routes/setup.js";
@@ -34,7 +36,7 @@ export async function buildApp(deps: AppDeps, config: Config, opts: BuildOptions
   registerErrorHandler(app);
 
   await app.register(cookie);
-  await app.register(multipart, { limits: { fileSize: MAX_IMAGE_BYTES, files: 1, fields: 5 } });
+  await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 5 } });
   await app.register(rateLimit, {
     global: true,
     max: 600,
@@ -42,7 +44,13 @@ export async function buildApp(deps: AppDeps, config: Config, opts: BuildOptions
     redis: deps.redis,
     nameSpace: "sk:rl:",
     skipOnError: true,
-    allowList: (req) => req.url === "/api/health" || req.url === "/api/ready",
+    // Health checks, and the storefront's server-side rendering (one container IP for every
+    // shopper) when it proves itself with the shared REVALIDATE_SECRET.
+    allowList: (req) => {
+      if (req.url === "/api/health" || req.url === "/api/ready") return true;
+      const internal = req.headers["x-shopkit-internal"];
+      return !!config.REVALIDATE_SECRET && typeof internal === "string" && safeEqual(internal, config.REVALIDATE_SECRET);
+    },
   });
 
   await app.register(swagger, {
@@ -61,6 +69,7 @@ export async function buildApp(deps: AppDeps, config: Config, opts: BuildOptions
   await app.register(setupRoutes, { prefix: "/api/setup", deps, config });
   await app.register(authRoutes, { prefix: "/api/admin/auth", deps, config });
   await app.register(adminRoutes, { prefix: "/api/admin", deps });
+  await app.register(catalogRoutes, { prefix: "/api/admin", deps });
   await app.register(storefrontRoutes, { prefix: "/api/storefront", deps });
   await app.register(mediaRoutes, { deps });
 

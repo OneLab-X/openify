@@ -12,6 +12,9 @@ const envSchema = z.object({
   SESSION_SECRET: z.string().min(32, "SESSION_SECRET must be at least 32 characters"),
   REVALIDATE_SECRET: z.string().min(16).optional(),
   SHOPKIT_DATA_DIR: z.string().default("./data"),
+  /** Optional Meilisearch (compose profile `meilisearch`); Postgres full-text is used without it. */
+  MEILISEARCH_URL: z.url().optional(),
+  MEILISEARCH_API_KEY: z.string().optional(),
   TRUST_PROXY: z
     .string()
     .default("true")

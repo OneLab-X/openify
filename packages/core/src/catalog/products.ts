@@ -638,7 +638,7 @@ export async function catalogFacets(db: Executor, storeId: string) {
 // ── Saved views ──────────────────────────────────────────────────────────────
 export const savedViewInput = z.object({
   name: z.string().trim().min(1).max(80),
-  filters: productListQuery.omit({ cursor: true, limit: true }).partial(),
+  filters: productListQuery.omit({ cursor: true, limit: true, sort: true }).partial().extend({ sort: z.enum(PRODUCT_SORTS).optional() }),
 });
 
 export async function listSavedViews(db: Executor, storeId: string) {
