@@ -40,6 +40,9 @@ import { getSetting } from "../settings.js";
 import { ensureCustomerForOrder, refreshCustomerStats } from "./customers.js";
 import { recordDiscountUsage } from "./discounts.js";
 import { refundOrder } from "./refunds.js";
+import { listFulfillments } from "./fulfillments.js";
+import { listReturns, returnableQuantities } from "./returns.js";
+import { shipmentOrigin } from "./shipping.js";
 import { issueGiftCardsForOrder, recordGiftCardSale, reverseGiftCardRedemptions } from "./gift-cards.js";
 import type { Pricing } from "./pricing.js";
 
@@ -528,6 +531,11 @@ export async function orderLinesView(deps: CoreDeps, orderId: string) {
       total: l.unitPrice * l.quantity - l.discountAmount,
       refundedQuantity: l.refundedQuantity,
       restockedQuantity: l.restockedQuantity,
+      fulfilledQuantity: l.fulfilledQuantity,
+      returnedQuantity: l.returnedQuantity,
+      fulfillableQuantity: l.giftCard ? 0 : Math.max(0, l.quantity - l.fulfilledQuantity - Math.min(l.refundedQuantity, l.quantity - l.fulfilledQuantity)),
+      giftCard: l.giftCard,
+      locationId: l.locationId,
       attributes: l.attributes,
       image: img ? mediaView(deps, img) : null,
     };
@@ -584,7 +592,12 @@ export async function getOrderAdmin(deps: CoreDeps, storeId: string, orderId: st
     sourceName: o.sourceName,
     marketingConsent: o.marketingConsent,
     statusUrl: orderStatusUrl(deps, o.id),
+    giftCardTotal: o.giftCardTotal,
+    buyerTaxId: o.buyerTaxId,
+    shipFrom: await shipmentOrigin(deps.db, storeId),
     lines,
+    fulfillments: await listFulfillments(deps.db, orderId),
+    returns: await listReturns(deps.db, orderId),
     transactions: txs.map((t) => ({
       id: t.id,
       kind: t.kind,
@@ -599,7 +612,7 @@ export async function getOrderAdmin(deps: CoreDeps, storeId: string, orderId: st
       createdAt: t.createdAt.toISOString(),
     })),
     events: events.map((e) => ({ id: e.id, type: e.type, message: e.message, actorType: e.actorType, actorId: e.actorId, createdAt: e.createdAt.toISOString() })),
-    refunds: refundRows.map((r) => ({ id: r.id, amount: r.amount, currency: r.currency, reason: r.reason, restock: r.restock, createdAt: r.createdAt.toISOString() })),
+    refunds: refundRows.map((r) => ({ id: r.id, amount: r.amount, shippingAmount: r.shippingAmount, status: r.status, currency: r.currency, reason: r.reason, restock: r.restock, returnId: r.returnId, createdAt: r.createdAt.toISOString() })),
   };
 }
 
@@ -682,13 +695,16 @@ export async function getOrderPublic(deps: CoreDeps, storeId: string, orderId: s
   const events = await deps.db
     .select()
     .from(orderEvents)
-    .where(and(eq(orderEvents.orderId, orderId), inArray(orderEvents.type, ["placed", "payment_captured", "marked_paid", "shipping_update", "cancelled", "refunded"])))
+    .where(and(eq(orderEvents.orderId, orderId), inArray(orderEvents.type, ["placed", "payment_captured", "marked_paid", "shipping_update", "fulfilled", "cancelled", "refunded", "return_requested", "return_received"])))
     .orderBy(asc(orderEvents.createdAt));
   return {
     ...orderSummary(o),
     paymentInstructions: o.financialStatus === "pending" && o.paymentProvider ? await offlineInstructions(deps, storeId, o.paymentProvider) : null,
     placed: !!o.placedAt,
     lines,
+    fulfillments: (await listFulfillments(deps.db, orderId)).filter((f) => f.status !== "cancelled").map((f) => ({ name: f.name, status: f.status, carrierName: f.carrierName, trackingNumber: f.trackingNumber, trackingUrl: f.trackingUrl, deliveredAt: f.deliveredAt, createdAt: f.createdAt })),
+    returnable: Object.fromEntries(await returnableQuantities(deps.db, orderId)),
+    returns: (await listReturns(deps.db, orderId)).map((r) => ({ id: r.id, name: r.name, status: r.status, createdAt: r.createdAt, lines: r.lines.map((l) => ({ orderLineId: l.orderLineId, quantity: l.quantity })) })),
     shippingUpdates: events
       .filter((e) => e.type === "shipping_update")
       .map((e) => ({ at: e.createdAt.toISOString(), carrier: (e.data.carrier as string | undefined) ?? null, trackingNumber: (e.data.trackingNumber as string | undefined) ?? null, trackingUrl: (e.data.trackingUrl as string | undefined) ?? null, message: (e.data.message as string | undefined) ?? null })),

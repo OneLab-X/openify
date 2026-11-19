@@ -207,6 +207,7 @@ export async function customerView(db: Executor, c: CustomerRow) {
     marketingConsent: c.marketingConsent,
     hasPassword: c.passwordHash !== null,
     note: c.note,
+    taxId: c.taxId,
     tags: tagRows.map((t) => t.tag),
     ordersCount: c.ordersCount,
     totalSpent: c.totalSpent,
@@ -412,6 +413,8 @@ export const adminCustomerInput = z.object({
   lastName: z.string().trim().max(100).nullish(),
   phone: z.string().trim().max(40).nullish(),
   note: z.string().max(5000).nullish(),
+  /** Optional GSTIN / VAT id printed on invoices. */
+  taxId: z.string().trim().max(20).nullish(),
   marketingConsent: z.boolean().default(false),
   state: z.enum(["enabled", "disabled"]).default("enabled"),
   tags: z.array(z.string().trim().min(1).max(100)).max(50).default([]),
@@ -428,6 +431,7 @@ export async function saveCustomerAdmin(deps: CoreDeps, actor: Actor, storeId: s
       lastName: d.lastName || null,
       phone: d.phone || null,
       note: d.note || null,
+      taxId: d.taxId?.toUpperCase() || null,
       state: d.state,
     };
     if (id) {
