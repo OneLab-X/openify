@@ -103,6 +103,7 @@ export const checkoutSchema = z
     giftCards: z.array(z.object({ lastCharacters: z.string(), amount: money })),
     giftCardErrors: z.array(z.string()),
     giftCardTotal: money,
+    giftCardCodes: z.array(z.string()),
     totalDue: money,
     buyerTaxId: z.string().nullable(),
     shippingRequired: z.boolean(),

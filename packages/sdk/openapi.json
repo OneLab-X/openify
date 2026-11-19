@@ -3668,6 +3668,12 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "giftCardCodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "totalDue": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -3813,6 +3819,7 @@
           "giftCards",
           "giftCardErrors",
           "giftCardTotal",
+          "giftCardCodes",
           "totalDue",
           "buyerTaxId",
           "shippingRequired",
@@ -12523,6 +12530,12 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "giftCardCodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "totalDue": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -12670,6 +12683,7 @@
           "giftCards",
           "giftCardErrors",
           "giftCardTotal",
+          "giftCardCodes",
           "totalDue",
           "buyerTaxId",
           "shippingRequired",

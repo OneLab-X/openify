@@ -30,6 +30,48 @@ export function OrderDetails({ order, locale }: { order: Order; locale: string }
           {order.paymentInstructions.instructions ? <p className="mt-2 whitespace-pre-line text-muted-foreground">{order.paymentInstructions.instructions}</p> : null}
         </div>
       ) : null}
+      {order.fulfillments.length ? (
+        <section aria-labelledby="shipments-h" className="grid gap-2">
+          <h2 id="shipments-h" className="text-lg font-semibold">
+            Shipments
+          </h2>
+          <ul className="grid gap-2 text-sm">
+            {order.fulfillments.map((f) => (
+              <li key={f.name} className="rounded-md border border-input p-3">
+                <p className="font-medium">
+                  {label(f.status)} · {f.carrierName}
+                </p>
+                {f.trackingNumber ? <p>Tracking number: {f.trackingNumber}</p> : null}
+                {f.trackingUrl ? (
+                  <a href={f.trackingUrl} className="underline" rel="noreferrer" target="_blank">
+                    Track your package
+                  </a>
+                ) : null}
+                {f.deliveredAt ? <p className="text-muted-foreground">Delivered {new Date(f.deliveredAt).toLocaleDateString(locale)}</p> : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {order.returns.length ? (
+        <section aria-labelledby="returns-h" className="grid gap-2">
+          <h2 id="returns-h" className="text-lg font-semibold">
+            Returns
+          </h2>
+          <ul className="grid gap-2 text-sm">
+            {order.returns.map((r) => (
+              <li key={r.id} className="rounded-md border border-input p-3">
+                <p className="font-medium">
+                  {r.name} · {label(r.status)}
+                </p>
+                <p className="text-muted-foreground">
+                  {r.lines.map((l) => `${order.lines.find((x) => x.id === l.orderLineId)?.title ?? "Item"} × ${l.quantity}`).join(", ")}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       {order.shippingUpdates.length ? (
         <ul className="grid gap-2 text-sm">
           {order.shippingUpdates.map((u) => (

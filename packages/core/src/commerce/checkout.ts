@@ -218,6 +218,8 @@ export async function checkoutView(deps: CoreDeps, storeId: string, checkout: Ch
     giftCards: pricing.giftCards.map((g) => ({ lastCharacters: g.lastCharacters, amount: g.amount })),
     giftCardErrors: pricing.giftCardErrors,
     giftCardTotal: pricing.giftCardTotal,
+    /** The codes this shopper entered (their own cart), so the page can add and remove cards. */
+    giftCardCodes: cart.giftCardCodes,
     totalDue: pricing.totalDue,
     buyerTaxId: checkout.buyerTaxId,
     shippingRequired: pricing.shippingRequired,

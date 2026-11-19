@@ -3161,6 +3161,7 @@ export interface components {
             }[];
             giftCardErrors: string[];
             giftCardTotal: number;
+            giftCardCodes: string[];
             totalDue: number;
             buyerTaxId: string | null;
             shippingRequired: boolean;
@@ -4823,6 +4824,7 @@ export interface components {
             }[];
             giftCardErrors: string[];
             giftCardTotal: number;
+            giftCardCodes: string[];
             totalDue: number;
             buyerTaxId: string | null;
             shippingRequired: boolean;

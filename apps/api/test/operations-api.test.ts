@@ -1,5 +1,6 @@
 import { beginSetup, launchStore, orderStatusToken, saveOwnerStep, saveStorageStep, saveStoreStep } from "@shopkit/core";
 import { eq, outboxEvents } from "@shopkit/db";
+import type { LightMyRequestResponse } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Jar, makeHarness, STRONG, type Harness } from "./harness.js";
 
@@ -22,7 +23,7 @@ beforeEach(async () => {
   await launchStore(h.deps, actor);
 });
 
-type Call = (method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", url: string, payload?: unknown) => ReturnType<Harness["app"]["inject"]>;
+type Call = (method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", url: string, payload?: unknown) => Promise<LightMyRequestResponse>;
 
 async function signIn(email = "asha@pls.test", password = STRONG): Promise<Call> {
   const jar = new Jar();

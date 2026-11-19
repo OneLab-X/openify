@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OrderDetails } from "@/components/OrderDetails";
+import { ReturnRequest } from "@/components/ReturnRequest";
 import { getOrderStatus, getStore } from "@/lib";
 
 export const metadata: Metadata = { title: "Your order", robots: { index: false, follow: false } };
@@ -26,7 +27,10 @@ export default async function OrderStatusPage({ params, searchParams }: { params
       ) : (
         <h1 className="mb-6 text-2xl font-semibold">{order.placed ? `Order ${order.name}` : "Order not placed yet"}</h1>
       )}
-      <OrderDetails order={order} locale={store?.locale ?? "en"} />
+      <div className="grid gap-6">
+        <OrderDetails order={order} locale={store?.locale ?? "en"} />
+        <ReturnRequest order={order} endpoint={`/orders/${token}/returns`} />
+      </div>
       <p className="mt-10">
         <Link href="/" className="underline">
           Continue shopping

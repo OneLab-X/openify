@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { OrderDetails } from "@/components/OrderDetails";
+import { ReturnRequest } from "@/components/ReturnRequest";
 import { sf, type OrderPublic } from "@/lib/shop-client";
 
 export function AccountOrder({ id, locale }: { id: string; locale: string }) {
@@ -20,6 +21,7 @@ export function AccountOrder({ id, locale }: { id: string; locale: string }) {
       </Link>
       <h1 className="text-2xl font-semibold">Order {order.name}</h1>
       <OrderDetails order={order} locale={locale} />
+      <ReturnRequest order={order} endpoint={`/account/orders/${order.id}/returns`} onDone={setOrder} />
     </div>
   );
 }

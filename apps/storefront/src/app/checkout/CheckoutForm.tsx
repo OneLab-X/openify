@@ -34,6 +34,7 @@ export function CheckoutForm({ checkoutId, shopName, locale, initialError }: { c
   const [consent, setConsent] = useState(false);
   const [address, setAddress] = useState<Address>(EMPTY);
   const [code, setCode] = useState("");
+  const [giftCode, setGiftCode] = useState("");
   const [error, setError] = useState<string | null>(initialError);
   const [busy, setBusy] = useState(false);
   const [stripeConfirm, setStripeConfirm] = useState<(() => Promise<string | null>) | null>(null);
@@ -249,7 +250,10 @@ export function CheckoutForm({ checkoutId, shopName, locale, initialError }: { c
                       setView({ ...view, shippingRateId: r.id });
                       void save({ shippingRateId: r.id });
                     }} />
-                    {r.title}
+                    <span>
+                      {r.title}
+                      {r.description ? <span className="block text-xs text-muted-foreground">{r.description}</span> : null}
+                    </span>
                   </span>
                   <span>{r.amount === 0 ? "Free" : money(r.amount)}</span>
                 </label>
@@ -289,11 +293,11 @@ export function CheckoutForm({ checkoutId, shopName, locale, initialError }: { c
         ) : null}
         {stripeConfirm ? (
           <button type="button" onClick={() => void confirmStripe()} disabled={busy} className="h-12 rounded-md bg-primary font-medium text-primary-foreground disabled:opacity-50">
-            {busy ? "Processing…" : `Pay ${money(view.total)}`}
+            {busy ? "Processing…" : `Pay ${money(view.totalDue)}`}
           </button>
         ) : (
-          <button type="submit" disabled={busy || view.paymentMethods.length === 0} className="h-12 rounded-md bg-primary font-medium text-primary-foreground disabled:opacity-50">
-            {busy ? "Processing…" : view.paymentMethods.find((m) => m.id === view.paymentProvider)?.flow === "offline" ? "Place order" : `Pay now · ${money(view.total)}`}
+          <button type="submit" disabled={busy || (view.paymentMethods.length === 0 && view.totalDue > 0)} className="h-12 rounded-md bg-primary font-medium text-primary-foreground disabled:opacity-50">
+            {busy ? "Processing…" : view.totalDue <= 0 || view.paymentMethods.find((m) => m.id === view.paymentProvider)?.flow === "offline" ? "Place order" : `Pay now · ${money(view.totalDue)}`}
           </button>
         )}
       </form>
@@ -323,6 +327,23 @@ export function CheckoutForm({ checkoutId, shopName, locale, initialError }: { c
             Apply
           </button>
         </form>
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save({ giftCardCodes: [...view.giftCardCodes, giftCode.trim()] }).then(() => setGiftCode(""));
+          }}
+        >
+          <input value={giftCode} onChange={(e) => setGiftCode(e.target.value)} placeholder="Gift card code" aria-label="Gift card code" autoComplete="off" className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm" />
+          <button type="submit" disabled={giftCode.trim().length < 8} className="h-9 rounded-md border border-input px-3 text-sm">
+            Apply
+          </button>
+        </form>
+        {view.giftCardErrors.map((g) => (
+          <p key={g} className="text-sm text-red-700">
+            {g}
+          </p>
+        ))}
         {view.discount.code ? (
           <p className={`text-sm ${view.discount.applied ? "text-green-700" : "text-red-700"}`}>{view.discount.applied ? `${view.discount.code.toUpperCase()} applied` : view.discount.error}</p>
         ) : null}
@@ -331,12 +352,19 @@ export function CheckoutForm({ checkoutId, shopName, locale, initialError }: { c
             <dt>Subtotal</dt>
             <dd>{money(view.subtotal)}</dd>
           </div>
-          {view.discountTotal ? (
-            <div className="flex justify-between text-green-700">
-              <dt>Discount</dt>
-              <dd>−{money(view.discountTotal)}</dd>
-            </div>
-          ) : null}
+          {view.discounts.length
+            ? view.discounts.map((d) => (
+                <div key={`${d.code ?? ""}${d.title}`} className="flex justify-between text-green-700">
+                  <dt>{d.code ? d.code.toUpperCase() : d.title}</dt>
+                  <dd>−{money(d.amount)}</dd>
+                </div>
+              ))
+            : view.discountTotal ? (
+                <div className="flex justify-between text-green-700">
+                  <dt>Discount</dt>
+                  <dd>−{money(view.discountTotal)}</dd>
+                </div>
+              ) : null}
           {view.shippingRequired ? (
             <div className="flex justify-between">
               <dt>Shipping</dt>
@@ -355,6 +383,28 @@ export function CheckoutForm({ checkoutId, shopName, locale, initialError }: { c
             <dt>Total</dt>
             <dd data-testid="checkout-total">{money(view.total)}</dd>
           </div>
+          {view.giftCards.map((g) => (
+            <div key={g.lastCharacters} className="flex justify-between">
+              <dt className="flex items-center gap-2">
+                Gift card ••••{g.lastCharacters}
+                <button
+                  type="button"
+                  className="text-xs underline"
+                  aria-label={`Remove gift card ending ${g.lastCharacters}`}
+                  onClick={() => void save({ giftCardCodes: view.giftCardCodes.filter((c) => !c.replace(/[\s-]/g, "").toUpperCase().endsWith(g.lastCharacters)) })}
+                >
+                  Remove
+                </button>
+              </dt>
+              <dd>−{money(g.amount)}</dd>
+            </div>
+          ))}
+          {view.giftCardTotal ? (
+            <div className="flex justify-between font-semibold">
+              <dt>To pay</dt>
+              <dd data-testid="checkout-due">{money(view.totalDue)}</dd>
+            </div>
+          ) : null}
         </dl>
       </aside>
     </div>
