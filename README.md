@@ -2,7 +2,7 @@
 
 Open-source, self-hosted alternative to Shopify. Install with Docker, open the URL, and a setup wizard walks you through your store details, logo, and providers for storage (local, S3, R2, GCS, Azure, Google Drive…), payments (Razorpay, Stripe, PayPal, Cashfree, PhonePe, COD…), email and analytics (GA4, Plausible…). Provider secrets are stored encrypted in PostgreSQL.
 
-> Status: Phase 1 (foundation + setup wizard) implemented. Not production-ready yet.
+> Status: Phases 1–2 (foundation + setup wizard; catalog and media) implemented. Not production-ready yet.
 
 ## Stack
 pnpm + Turborepo monorepo · TypeScript · Fastify API · Next.js admin and storefront · PostgreSQL · Redis + BullMQ workers · Docker Compose + Caddy.

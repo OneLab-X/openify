@@ -2,7 +2,37 @@
 
 All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased] — Phase 1: foundation + setup wizard
+## [Unreleased] — Phase 2: catalog and media
+
+### Added
+- Catalog schema: products, options/values, variants (price, compare-at, cost, SKU, barcode, weight, shipping,
+  taxable, HSN), tags, vendors, product types, product media, collections (manual/smart) with materialised
+  membership, metafield definitions/values, saved views, inventory items/levels/adjustment ledger, `jobs_log`.
+- `packages/core`: product, collection, inventory, media, search, storefront and CSV services; DOMPurify
+  sanitising on write and output; keyset cursor pagination; refreshed price range/availability/search vector.
+- Storage adapters: Cloudflare R2, Backblaze B2, Google Cloud Storage, Azure Blob, Google Drive; streaming
+  multipart uploads for the S3 family; presigned direct uploads; one contract test suite for every adapter
+  (emulators in CI, `SHOPKIT_LIVE_STORAGE_<ID>` for real accounts).
+- Media: API or direct-to-storage upload, sharp WebP/AVIF renditions in the worker, alt text, ordering,
+  `/media/<id>/w<width>.<fmt>` renditions and signed `/media/s/...` URLs, migration to another provider.
+- Admin API and admin UI: product list (search, filters, saved views, bulk edit/archive/tag/delete), product
+  editor (TipTap, variant matrix, media with drag-and-drop, metafields, SEO), collections editor (rules builder,
+  manual ordering), inventory per location with ledger history, Shopify CSV import/export with progress and
+  error report, Settings → Storage media migration.
+- Storefront API: products, product by handle, collections, collection products with price/availability/
+  option/tag filters, facets, search, cursor pagination, cache headers. Storefront home, collection, product
+  and search pages (replaced by themes in Phase 5).
+- Worker: images, imports, media-migration and search-index queues; product/collection/media events revalidate
+  storefront cache tags.
+- Search: Postgres full-text + pg_trgm; optional Meilisearch (compose profile `meilisearch`, `search:reindex`).
+- Playwright catalog suite.
+
+### Changed
+- `/internal/revalidate` expires tags immediately (`{ expire: 0 }`) so catalog changes show on the next visit.
+- Signed local media URLs include the provider id; the setup wizard updates the default location in place.
+- Upload limit for product images and CSV files is 20 MB (brand assets stay at 5 MB).
+
+## Phase 1: foundation + setup wizard
 
 ### Added
 - pnpm + Turborepo monorepo: `apps/{api,worker,admin,storefront}`, `packages/{db,core,crypto,providers,sdk,ui,config}`, `e2e`.
