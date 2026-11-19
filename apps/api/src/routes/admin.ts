@@ -13,6 +13,7 @@ import {
   storeDetailsSchema,
   storeView,
   testCredential,
+  updateSecurity,
   updateStoreDetails,
   upsertCredential,
   uploadBrandAsset,
@@ -57,7 +58,7 @@ const SETTING_PERMISSION: Record<keyof typeof SETTINGS, Permission> = {
   "payments.mode": "settings:payments",
   "shipping.defaults": "settings:shipping",
   "tax.config": "settings:tax",
-    "security.config": "settings:security",
+  "security.config": "settings:security",
   "checkout.config": "settings:general",
   "notifications.config": "settings:email",
   "notifications.templates": "settings:email",
@@ -186,6 +187,7 @@ export const adminRoutes: FastifyPluginAsyncZod<{ deps: AppDeps }> = async (app,
         tax: await getSetting(deps.db, id, "tax.config"),
         checkout: await getSetting(deps.db, id, "checkout.config"),
         notifications: await getSetting(deps.db, id, "notifications.config"),
+        security: await getSetting(deps.db, id, "security.config"),
       };
     },
   );
@@ -207,6 +209,11 @@ export const adminRoutes: FastifyPluginAsyncZod<{ deps: AppDeps }> = async (app,
       assertCan(req.staff!.permissions, SETTING_PERMISSION[key]);
       const value = SETTINGS[key].parse(req.body.value);
       const storeId = req.staff!.storeId;
+      if (key === "security.config") {
+        // Same rules as PUT /security: you must have 2FA yourself before requiring it.
+        await updateSecurity(deps, actorOf(req), storeId, value as { requireTwoFactor: boolean });
+        return { ok: true as const };
+      }
       if (key === "storage.active" || key === "email.active") {
         const target = value as { provider: string; mode: "test" | "live" } | null;
         const kind = key === "storage.active" ? "storage" : "email";

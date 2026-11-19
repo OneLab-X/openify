@@ -42,6 +42,8 @@ import {
   verifyCustomerOtp,
   verifyInput,
   verifyOrderStatusToken,
+  requestReturn,
+  returnRequestInput,
   type CustomerLogin,
 } from "@shopkit/core";
 import { orders, and, eq } from "@shopkit/db";
@@ -231,6 +233,25 @@ export const storefrontCommerceRoutes: FastifyPluginAsyncZod<{ deps: AppDeps; co
     },
   );
 
+  /** Shoppers ask for a return from the status page; staff approve it in the admin. */
+  const customerReturnInput = returnRequestInput.pick({ lines: true, note: true });
+  app.post(
+    "/orders/:token/returns",
+    {
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+      schema: { tags, operationId: "requestOrderReturn", params: z.object({ token: z.string().max(200) }), body: customerReturnInput, response: { 200: orderPublicSchema, ...errorResponses } },
+    },
+    async (req) => {
+      const id = verifyOrderStatusToken(deps, req.params.token);
+      if (!id) throw new AppError("not_found", "Order not found");
+      const sid = await storeId();
+      const [o] = await deps.db.select({ customerId: orders.customerId }).from(orders).where(and(eq(orders.storeId, sid), eq(orders.id, id)));
+      if (!o) throw new AppError("not_found", "Order not found");
+      await requestReturn(deps, { type: "customer", customerId: o.customerId }, sid, id, { ...req.body, approve: false, notify: true });
+      return getOrderPublic(deps, sid, id);
+    },
+  );
+
   // ── Customer accounts ─────────────────────────────────────────────────────
   async function signIn(req: FastifyRequest, reply: FastifyReply, sid: string, login: CustomerLogin) {
     reply.setCookie(CUSTOMER_COOKIE, login.token, { httpOnly: true, sameSite: "lax", secure, path: "/", maxAge: 30 * 24 * 60 * 60 });
@@ -330,6 +351,22 @@ export const storefrontCommerceRoutes: FastifyPluginAsyncZod<{ deps: AppDeps; co
         .where(and(eq(orders.storeId, req.customer!.storeId), eq(orders.id, req.params.id), eq(orders.customerId, req.customer!.id)));
       if (!own) throw new AppError("not_found", "Order not found");
       return getOrderPublic(deps, req.customer!.storeId, own.id);
+    },
+  );
+
+  app.post(
+    "/account/orders/:id/returns",
+    {
+      onRequest: requireCustomer,
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+      schema: { tags, operationId: "requestAccountReturn", params: z.object({ id: z.uuid() }), body: customerReturnInput, response: { 200: orderPublicSchema, ...errorResponses } },
+    },
+    async (req) => {
+      const c = req.customer!;
+      const [own] = await deps.db.select({ id: orders.id }).from(orders).where(and(eq(orders.storeId, c.storeId), eq(orders.id, req.params.id), eq(orders.customerId, c.id)));
+      if (!own) throw new AppError("not_found", "Order not found");
+      await requestReturn(deps, { type: "customer", customerId: c.id }, c.storeId, own.id, { ...req.body, approve: false, notify: true });
+      return getOrderPublic(deps, c.storeId, own.id);
     },
   );
 };

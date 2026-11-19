@@ -69,6 +69,8 @@ export const commerceRoutes: FastifyPluginAsyncZod<{ deps: AppDeps }> = async (a
   const ordersRefund = requireStaff(deps, "orders:refund");
   const customersRead = requireStaff(deps, "customers:read");
   const customersWrite = requireStaff(deps, "customers:write");
+  const discountsRead = requireStaff(deps, "discounts:read");
+  const discountsWrite = requireStaff(deps, "discounts:write");
 
   // ── Orders ─────────────────────────────────────────────────────────────────
   app.get("/orders", { onRequest: ordersRead, schema: { tags, operationId: "listOrders", querystring: orderListQuery, response: { 200: orderListSchema, ...errorResponses } } }, (req) =>
@@ -226,20 +228,20 @@ export const commerceRoutes: FastifyPluginAsyncZod<{ deps: AppDeps }> = async (a
     },
   );
 
-  // ── Discounts (basic codes) ────────────────────────────────────────────────
-  app.get("/discounts", { onRequest: ordersRead, schema: { tags, operationId: "listDiscounts", response: { 200: z.object({ items: z.array(discountSchema) }), ...errorResponses } } }, async (req) => ({
+  // ── Discounts ────────────────────────────────────────────────
+  app.get("/discounts", { onRequest: discountsRead, schema: { tags, operationId: "listDiscounts", response: { 200: z.object({ items: z.array(discountSchema) }), ...errorResponses } } }, async (req) => ({
     items: await listDiscounts(deps.db, sid(req)),
   }));
-  app.post("/discounts", { onRequest: ordersWrite, schema: { tags, operationId: "createDiscount", body: discountInput, response: { 200: discountSchema, ...errorResponses } } }, (req) =>
+  app.post("/discounts", { onRequest: discountsWrite, schema: { tags, operationId: "createDiscount", body: discountInput, response: { 200: discountSchema, ...errorResponses } } }, (req) =>
     saveDiscount(deps, actorOf(req), sid(req), req.body),
   );
-  app.get("/discounts/:id", { onRequest: ordersRead, schema: { tags, operationId: "getDiscount", params: idParams, response: { 200: discountSchema, ...errorResponses } } }, (req) =>
+  app.get("/discounts/:id", { onRequest: discountsRead, schema: { tags, operationId: "getDiscount", params: idParams, response: { 200: discountSchema, ...errorResponses } } }, (req) =>
     getDiscount(deps.db, sid(req), req.params.id),
   );
-  app.put("/discounts/:id", { onRequest: ordersWrite, schema: { tags, operationId: "updateDiscount", params: idParams, body: discountInput, response: { 200: discountSchema, ...errorResponses } } }, (req) =>
+  app.put("/discounts/:id", { onRequest: discountsWrite, schema: { tags, operationId: "updateDiscount", params: idParams, body: discountInput, response: { 200: discountSchema, ...errorResponses } } }, (req) =>
     saveDiscount(deps, actorOf(req), sid(req), req.body, req.params.id),
   );
-  app.delete("/discounts/:id", { onRequest: ordersWrite, schema: { tags, operationId: "deleteDiscount", params: idParams, response: { 200: okBody, ...errorResponses } } }, async (req) => {
+  app.delete("/discounts/:id", { onRequest: discountsWrite, schema: { tags, operationId: "deleteDiscount", params: idParams, response: { 200: okBody, ...errorResponses } } }, async (req) => {
     await deleteDiscount(deps, actorOf(req), sid(req), req.params.id);
     return ok;
   });

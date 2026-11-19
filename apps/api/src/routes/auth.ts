@@ -74,7 +74,7 @@ export const authRoutes: FastifyPluginAsyncZod<{ deps: AppDeps; config: Config }
 
   app.get(
     "/me",
-    { onRequest: requireStaff(deps), schema: { tags, operationId: "me", response: { 200: meResponse, ...errorResponses } } },
+    { onRequest: requireStaff(deps, undefined, { allowPendingTwoFactor: true }), schema: { tags, operationId: "me", response: { 200: meResponse, ...errorResponses } } },
     async (req) => {
       const s = req.staff!;
       const staff = await getStaff(deps.db, s.storeId, s.id);
@@ -89,13 +89,13 @@ export const authRoutes: FastifyPluginAsyncZod<{ deps: AppDeps; config: Config }
 
   app.post(
     "/totp/start",
-    { onRequest: requireStaff(deps), schema: { tags, operationId: "startTotp", response: { 200: totpEnrollment, ...errorResponses } } },
+    { onRequest: requireStaff(deps, undefined, { allowPendingTwoFactor: true }), schema: { tags, operationId: "startTotp", response: { 200: totpEnrollment, ...errorResponses } } },
     (req) => startTotpEnrollment(deps, req.staff!.storeId, req.staff!.id),
   );
 
   app.post(
     "/totp/confirm",
-    { onRequest: requireStaff(deps), schema: { tags, operationId: "confirmTotp", body: totpCodeInput, response: { 200: okBody, ...errorResponses } } },
+    { onRequest: requireStaff(deps, undefined, { allowPendingTwoFactor: true }), schema: { tags, operationId: "confirmTotp", body: totpCodeInput, response: { 200: okBody, ...errorResponses } } },
     async (req) => {
       await confirmTotpEnrollment(deps, actorOf(req), req.staff!.storeId, req.staff!.id, req.body.code);
       return { ok: true as const };

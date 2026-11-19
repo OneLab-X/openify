@@ -84,6 +84,7 @@ export const staffView = z
     roleName: z.string(),
     permissions: z.array(z.string()),
     totpEnabled: z.boolean(),
+    twoFactorSetupRequired: z.boolean(),
     lastLoginAt: z.string().nullable(),
   })
   .meta({ id: "Staff" });
@@ -126,6 +127,7 @@ export const settingsView = z
         alertPaidOrder: z.boolean(),
       })
       .optional(),
+    security: z.object({ requireTwoFactor: z.boolean() }).optional(),
   })
   .meta({ id: "Settings" });
 
