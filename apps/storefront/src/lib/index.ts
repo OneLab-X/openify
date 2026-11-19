@@ -103,3 +103,17 @@ export function many(v: string | string[] | undefined): string[] {
 export function one(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v;
 }
+
+export type OrderPublic = Schemas["OrderPublic"];
+
+/** Order status by signed token; never cached (payment state changes). */
+export async function getOrderStatus(token: string): Promise<OrderPublic | null> {
+  const secret = process.env.REVALIDATE_SECRET;
+  const client = createShopkitClient({
+    baseUrl: apiOrigin(),
+    ...(secret ? { headers: { "x-shopkit-internal": secret } } : {}),
+    fetch: (req) => fetch(req, { cache: "no-store" }),
+  });
+  const { data } = await client.GET("/api/storefront/orders/{token}", { params: { path: { token } } });
+  return data ?? null;
+}
