@@ -12,6 +12,8 @@ export async function POST(request: Request) {
   }
   const body = (await request.json().catch(() => ({}))) as { tags?: unknown };
   const tags = Array.isArray(body.tags) ? body.tags.filter((t): t is string => typeof t === "string").slice(0, 50) : [];
-  for (const tag of tags) revalidateTag(tag, "max");
+  // Expire immediately: the next visit after a catalog change renders fresh data (the phase target is
+  // "visible on the storefront within 5 seconds"), instead of serving stale content once.
+  for (const tag of tags) revalidateTag(tag, { expire: 0 });
   return Response.json({ ok: true, revalidated: tags });
 }
