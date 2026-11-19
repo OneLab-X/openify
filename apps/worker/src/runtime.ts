@@ -4,7 +4,11 @@ import {
   deliverEmail,
   dispatchOutbox,
   emailJob,
+  getInstallStore,
   meiliSearch,
+  releaseExpiredReservation,
+  scanAbandonedCheckouts,
+  sweepExpiredReservations,
   processMedia,
   routeOutboxEvent,
   runJob,
@@ -34,6 +38,8 @@ export interface WorkerRuntime {
   workers: Worker[];
   /** One dispatcher pass; returns how many events were published. */
   dispatchOnce(): Promise<number>;
+  /** Registers repeatable jobs (abandoned-checkout scan + reservation sweep). */
+  scheduleRecurring(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -66,7 +72,7 @@ export function createRuntime(config: WorkerConfig, logger: Logger, env: Record<
   async function publish(events: OutboxEvent[]) {
     for (const event of events) {
       for (const job of await routeOutboxEvent(deps, event)) {
-        await queue(job.queue).add(job.name, job.data, { jobId: job.jobId });
+        await queue(job.queue).add(job.name, job.data, { jobId: job.jobId, ...(job.delay ? { delay: job.delay } : {}) });
       }
     }
   }
@@ -108,6 +114,20 @@ export function createRuntime(config: WorkerConfig, logger: Logger, env: Record<
       return result;
     },
     "media-migration": async (job) => runJob(deps, (job.data as { jobId: string }).jobId),
+    // Delayed job per unpaid order (SPEC §13 inventory-release): frees stock after the timeout.
+    "inventory-release": async (job) => {
+      const { storeId, orderId } = job.data as { storeId: string; orderId: string };
+      const released = await releaseExpiredReservation(deps, storeId, orderId);
+      return { status: released ? "released" : "kept" };
+    },
+    // Repeatable scan: abandoned-checkout reminders, plus a sweep for reservations whose delayed job was lost.
+    "abandoned-cart": async () => {
+      const store = await getInstallStore(deps.db);
+      const reminders = store?.status === "active" ? await scanAbandonedCheckouts(deps, store.id) : 0;
+      const released = await sweepExpiredReservations(deps);
+      if (reminders || released) logger.info({ reminders, released }, "abandoned-cart scan");
+      return { reminders, released };
+    },
   };
   const concurrency: Partial<Record<QueueName, number>> = { images: config.IMAGE_CONCURRENCY, imports: 1, "media-migration": 1 };
 
@@ -131,6 +151,9 @@ export function createRuntime(config: WorkerConfig, logger: Logger, env: Record<
     workers,
     async dispatchOnce() {
       return (await dispatchOutbox(deps.db, publish)).dispatched;
+    },
+    async scheduleRecurring() {
+      await queue("abandoned-cart").upsertJobScheduler("scan", { every: config.ABANDONED_SCAN_INTERVAL_MS }, { name: "scan", data: {} });
     },
     async close() {
       await Promise.all(workers.map((w) => w.close()));

@@ -20,6 +20,8 @@ const envSchema = z.object({
     .default("false")
     .transform((v) => v === "true"),
   IMAGE_CONCURRENCY: z.coerce.number().int().min(1).default(2),
+  /** How often the abandoned-checkout scan runs; the reminder delay itself is a store setting. */
+  ABANDONED_SCAN_INTERVAL_MS: z.coerce.number().int().min(1000).default(60_000),
 });
 export type WorkerConfig = z.infer<typeof envSchema>;
 

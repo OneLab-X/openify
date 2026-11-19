@@ -26,6 +26,7 @@ async function loop() {
   }
 }
 const running = loop();
+rt.scheduleRecurring().catch((err: unknown) => logger.error({ err }, "could not schedule recurring jobs"));
 
 const health = createServer((req, res) => {
   res.writeHead(healthy ? 200 : 503, { "content-type": "application/json" }).end(JSON.stringify({ ok: healthy }));
