@@ -1,0 +1,34 @@
+# e2e copy of Caddyfile with the payment sandbox route (docker-compose.e2e.yml).
+{
+	email {$ACME_EMAIL:admin@example.com}
+}
+
+{$SITE_ADDRESS:localhost} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	# Worker-only endpoint on the storefront; never public.
+	handle /internal/* {
+		respond 404
+	}
+	# e2e only: the browser loads the fake provider widgets from the payment sandbox.
+	handle_path /__sandbox/* {
+		reverse_proxy payments-sandbox:4200
+	}
+	handle /api/* {
+		reverse_proxy api:4000
+	}
+	handle /media/* {
+		reverse_proxy api:4000
+	}
+	handle /admin* {
+		reverse_proxy admin:3001
+	}
+	handle {
+		reverse_proxy storefront:3000
+	}
+}

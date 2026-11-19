@@ -1,7 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * Runs against the docker compose stack (SPEC §15). Start it on an empty volume first:
+ * Runs against the docker compose stack (SPEC §15) with the e2e overlay. Start it on an empty volume:
+ *   export COMPOSE_FILE=docker-compose.yml:docker-compose.e2e.yml
  *   docker compose down -v && ./scripts/install.sh
  * E2E_BASE_URL defaults to PUBLIC_URL from ../.env.
  */
@@ -22,5 +23,7 @@ export default defineConfig({
   projects: [
     { name: "setup", testMatch: /setup-wizard\.spec\.ts/, use: { ...devices["Desktop Chrome"] } },
     { name: "catalog", testMatch: /catalog\.spec\.ts/, dependencies: ["setup"], use: { ...devices["Desktop Chrome"] } },
+    // Needs the e2e overlay (payment sandbox + Mailpit): COMPOSE_FILE=docker-compose.yml:docker-compose.e2e.yml
+    { name: "checkout", testMatch: /checkout\.spec\.ts/, dependencies: ["catalog"], use: { ...devices["Desktop Chrome"] } },
   ],
 });

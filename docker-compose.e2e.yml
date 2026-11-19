@@ -1,0 +1,40 @@
+# e2e overlay: adds a local payment sandbox (fake Razorpay + Stripe) and Mailpit, and points the
+# test-mode payment adapters at the sandbox. Never use this file in production.
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.e2e.yml ./scripts/install.sh
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.e2e.yml pnpm e2e
+services:
+  payments-sandbox:
+    image: node:22-alpine
+    command: ["node", "/sandbox/server.mjs"]
+    restart: unless-stopped
+    environment:
+      PORT: "4200"
+      WEBHOOK_TARGET: http://api:4000
+      SANDBOX_RAZORPAY_WEBHOOK_SECRET: e2e_rzp_webhook_secret
+      SANDBOX_STRIPE_WEBHOOK_SECRET: whsec_e2e_sandbox_secret
+    volumes:
+      - ./e2e/sandbox:/sandbox:ro
+    ports:
+      - "127.0.0.1:${SANDBOX_HOST_PORT:-14200}:4200"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:4200/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MAILPIT_HOST_PORT:-18025}:8025"
+
+  api:
+    environment:
+      PAYMENT_SANDBOX_URL: http://payments-sandbox:4200
+      PAYMENT_SANDBOX_PUBLIC_URL: ${PUBLIC_URL}/__sandbox
+    depends_on:
+      payments-sandbox: { condition: service_healthy }
+
+  caddy:
+    volumes:
+      - ./docker/Caddyfile.e2e:/etc/caddy/Caddyfile:ro
