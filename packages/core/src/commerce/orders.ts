@@ -18,6 +18,7 @@ import {
   orders,
   productVariants,
   products,
+  providerCredentials,
   refundLines,
   refunds,
   sql,
@@ -787,6 +788,19 @@ export async function listOrders(deps: CoreDeps, storeId: string, query: z.input
   };
 }
 
+/** What to tell the customer about paying offline (bank details, COD note); non-secret config only. */
+export async function offlineInstructions(deps: CoreDeps, storeId: string, provider: string) {
+  const def = deps.registry.get("payment", provider);
+  if (def?.paymentFlow !== "offline") return null;
+  const [row] = await deps.db
+    .select({ config: providerCredentials.config })
+    .from(providerCredentials)
+    .where(and(eq(providerCredentials.storeId, storeId), eq(providerCredentials.kind, "payment"), eq(providerCredentials.provider, provider)))
+    .limit(1);
+  const config = (row?.config ?? {}) as { accountDetails?: string; instructions?: string };
+  return { title: def.displayName, details: config.accountDetails ?? "", instructions: config.instructions ?? null };
+}
+
 /** Customer-facing view (status page, account): no staff notes, timeline or provider ids. */
 export async function getOrderPublic(deps: CoreDeps, storeId: string, orderId: string) {
   const [o] = await deps.db.select().from(orders).where(and(eq(orders.storeId, storeId), eq(orders.id, orderId)));
@@ -799,6 +813,7 @@ export async function getOrderPublic(deps: CoreDeps, storeId: string, orderId: s
     .orderBy(asc(orderEvents.createdAt));
   return {
     ...orderSummary(o),
+    paymentInstructions: o.financialStatus === "pending" && o.paymentProvider ? await offlineInstructions(deps, storeId, o.paymentProvider) : null,
     placed: !!o.placedAt,
     lines,
     shippingUpdates: events

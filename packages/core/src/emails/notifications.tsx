@@ -2,7 +2,9 @@ import { render } from "@react-email/render";
 import { cartLines, checkouts, carts, eq, refunds } from "@shopkit/db";
 import type { ReactElement } from "react";
 import type { CoreDeps } from "../deps.js";
-import { getSetting } from "../settings.js";
+import { z } from "zod";
+import { AppError } from "../errors.js";
+import { getSetting, setSetting } from "../settings.js";
 import { getStore, storeView } from "../stores.js";
 import { formatAddress } from "../commerce/address.js";
 import { formatMinor, getOrderPublic, orderStatusUrl } from "../commerce/orders.js";
@@ -220,6 +222,22 @@ export async function renderNotification(deps: CoreDeps, storeId: string, templa
     ),
   );
   return { subject: fill(settings.subject, vars), html, text };
+}
+
+export const templateUpdateInput = z.object({
+  subject: z.string().trim().max(200).optional(),
+  intro: z.string().trim().max(2000).optional(),
+  enabled: z.boolean().optional(),
+});
+
+/** Saves a template override; empty strings fall back to the default text. */
+export async function updateNotificationTemplate(deps: Pick<CoreDeps, "db">, storeId: string, id: string, input: z.input<typeof templateUpdateInput>) {
+  if (!isNotificationTemplate(id)) throw new AppError("not_found", "Unknown template");
+  const d = templateUpdateInput.parse(input);
+  const current = await getSetting(deps.db, storeId, "notifications.templates");
+  const next = { ...current, [id]: { ...current[id], ...d } };
+  await setSetting(deps.db, storeId, "notifications.templates", next);
+  return (await notificationSettings(deps, storeId)).find((t) => t.id === id)!;
 }
 
 /** Staff recipients for merchant alerts: configured addresses, else the store email. */

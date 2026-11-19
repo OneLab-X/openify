@@ -1,4 +1,4 @@
-import { and, customers, desc, draftOrders, eq, orders, type Executor } from "@shopkit/db";
+import { and, customers, desc, draftOrders, eq, orders, sql, type Executor } from "@shopkit/db";
 import { z } from "zod";
 import { writeAudit } from "../audit.js";
 import type { Actor, CoreDeps } from "../deps.js";
@@ -171,4 +171,41 @@ export async function completeDraft(deps: CoreDeps, actor: Actor, storeId: strin
   });
   if (!paymentPending) await markOrderPaid(deps, actor, storeId, orderId, { note: "Paid when the order was created" });
   return { orderId };
+}
+
+/** Variant picker for draft orders: title/SKU search over sellable variants. */
+export async function searchVariants(deps: CoreDeps, storeId: string, q: string, limit = 20) {
+  const like = `%${q.trim().replace(/[\\%_]/g, "\\$&")}%`;
+  const rows = await deps.db.execute<{
+    variant_id: string;
+    product_id: string;
+    product_title: string;
+    variant_title: string;
+    sku: string | null;
+    price: string;
+    currency: string;
+    available: number | null;
+    tracked: boolean | null;
+    policy: "deny" | "continue";
+  }>(sql`
+    select v.id as variant_id, p.id as product_id, p.title as product_title, v.title as variant_title, v.sku, v.price::text, v.currency,
+           (select sum(l.available)::int from inventory_levels l where l.inventory_item_id = ii.id) as available, ii.tracked, v.inventory_policy as policy
+    from product_variants v
+    join products p on p.id = v.product_id
+    left join inventory_items ii on ii.variant_id = v.id
+    where v.store_id = ${storeId} and p.status = 'active'
+      and (p.title ilike ${like} or v.title ilike ${like} or v.sku ilike ${like})
+    order by p.title, v.position
+    limit ${Math.min(Math.max(limit, 1), 50)}`);
+  return rows.rows.map((r) => ({
+    variantId: r.variant_id,
+    productId: r.product_id,
+    productTitle: r.product_title,
+    variantTitle: r.variant_title === "Default Title" ? null : r.variant_title,
+    sku: r.sku,
+    price: Number(r.price),
+    currency: r.currency,
+    available: r.tracked ? (r.available ?? 0) : null,
+    inventoryPolicy: r.policy,
+  }));
 }
