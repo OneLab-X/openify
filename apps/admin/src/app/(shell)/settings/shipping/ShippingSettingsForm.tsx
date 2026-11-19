@@ -19,9 +19,18 @@ export function ShippingSettingsForm({ settings, currency }: { settings: Schemas
         if (shipping.error) return shipping;
         const tax =
           body.tax.mode === "india_gst"
-            ? { mode: "india_gst", pricesIncludeTax: true, label: "GST", defaultRateBps: body.tax.defaultRateBps, ...(body.tax.gstin ? { gstin: body.tax.gstin } : {}), ...(body.tax.registeredState ? { registeredState: body.tax.registeredState } : {}) }
+            ? {
+                mode: "india_gst",
+                pricesIncludeTax: settings.tax.mode === "india_gst" ? settings.tax.pricesIncludeTax : true,
+                label: "GST",
+                defaultRateBps: body.tax.defaultRateBps,
+                ...(body.tax.gstin ? { gstin: body.tax.gstin } : {}),
+                ...(body.tax.registeredState ? { registeredState: body.tax.registeredState } : {}),
+              }
             : body.tax;
-        return api.PUT("/api/admin/settings/{key}", { params: { path: { key: "tax.config" } }, body: { value: tax } });
+        // Keep "tax on shipping" (edited with the tax rates below).
+        const value = { ...tax, ...(settings.tax.taxShipping !== undefined ? { taxShipping: settings.tax.taxShipping } : {}) };
+        return api.PUT("/api/admin/settings/{key}", { params: { path: { key: "tax.config" } }, body: { value } });
       }}
     />
   );

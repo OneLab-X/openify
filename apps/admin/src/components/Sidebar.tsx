@@ -1,5 +1,5 @@
 "use client";
-import { BarChart3, Boxes, FileText, Home, Layers, LogOut, Package, Settings, ShoppingCart, Users, Percent } from "lucide-react";
+import { BarChart3, Boxes, FileText, Gift, Home, Layers, LogOut, Package, Settings, ShoppingCart, Users, Percent } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { api } from "@/lib/api-client";
@@ -12,6 +12,7 @@ const NAV = [
   { href: "/inventory", label: "Inventory", icon: Boxes },
   { href: "/customers", label: "Customers", icon: Users },
   { href: "/discounts", label: "Discounts", icon: Percent },
+  { href: "/gift-cards", label: "Gift cards", icon: Gift },
   { href: "/content", label: "Content", icon: FileText },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
