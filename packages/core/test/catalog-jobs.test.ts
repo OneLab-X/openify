@@ -75,6 +75,15 @@ describe("media", () => {
     expect((await deps.db.select().from(outboxEvents)).map((e) => e.type)).toEqual(["media.created", "media.processed"]);
   });
 
+  it("records images that sniff as PNG but cannot be decoded instead of retrying", async () => {
+    const broken = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEklEQVR4nGNkYPjPgA0wYRUFADMfAQ8cHr02AAAAAElFTkSuQmCC", "base64");
+    const view = await uploadMedia(deps, ACTOR, storeId, { filename: "broken.png", data: broken });
+    expect(await processMedia(deps, view.id)).toEqual({ status: "skipped", reason: "image could not be decoded" });
+    const [row] = await deps.db.select().from(media);
+    expect(row!.processingError).toMatch(/libpng/);
+    expect(row!.renditions).toEqual([]);
+  });
+
   it("refuses non-images and oversized files", async () => {
     await expect(uploadMedia(deps, ACTOR, storeId, { filename: "x.png", data: Buffer.from("<svg/>") })).rejects.toMatchObject({ code: "validation_failed" });
     await expect(uploadMedia(deps, ACTOR, storeId, { filename: "x.png", data: Buffer.alloc(21 * 1024 * 1024) })).rejects.toMatchObject({ code: "validation_failed" });

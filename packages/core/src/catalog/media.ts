@@ -204,7 +204,14 @@ export async function processMedia(deps: CoreDeps, mediaId: string): Promise<{ s
   for (const w of widths) {
     for (const format of ["webp", "avif"] as const) {
       const pipeline = sharp(original, { animated: false }).rotate().resize({ width: w, withoutEnlargement: true });
-      const out = await (format === "webp" ? pipeline.webp({ quality: 80 }) : pipeline.avif({ quality: 50, effort: 2 })).toBuffer({ resolveWithObject: true });
+      let out;
+      try {
+        out = await (format === "webp" ? pipeline.webp({ quality: 80 }) : pipeline.avif({ quality: 50, effort: 2 })).toBuffer({ resolveWithObject: true });
+      } catch (err) {
+        // Corrupt image data never decodes: record it instead of retrying the job (storage errors still retry).
+        await deps.db.update(media).set({ processingError: (err as Error).message.slice(0, 500), processedAt: new Date() }).where(eq(media.id, mediaId));
+        return { status: "skipped", reason: "image could not be decoded" };
+      }
       const key = `${dir}/w${w}.${format}`;
       await provider.put(key, out.data, { contentType: `image/${format}`, cacheControl: IMMUTABLE });
       renditions.push({ width: out.info.width, height: out.info.height, format, key, bytes: out.data.length });

@@ -1,4 +1,5 @@
 import { and, eq, inArray, productTags, products, productVariants, sql, tags, type Db } from "@shopkit/db";
+import { Meilisearch } from "meilisearch";
 import type { CoreDeps } from "../deps.js";
 import { htmlToText } from "./html.js";
 import { productTextMatch, productTextRank } from "./text-search.js";
@@ -91,8 +92,7 @@ export async function searchDocuments(db: Db, storeId: string, productIds?: stri
   return { docs, removed };
 }
 
-export async function meiliSearch(db: Db, opts: { url: string; apiKey?: string | undefined }): Promise<SearchEngine> {
-  const { Meilisearch } = await import("meilisearch");
+export function meiliSearch(db: Db, opts: { url: string; apiKey?: string | undefined }): SearchEngine {
   const client = new Meilisearch({ host: opts.url, ...(opts.apiKey ? { apiKey: opts.apiKey } : {}) });
   const configured = new Set<string>();
   const uid = (storeId: string) => `products_${storeId.replace(/-/g, "")}`;

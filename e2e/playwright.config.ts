@@ -18,5 +18,9 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // The catalog suite needs the store the wizard suite launches.
+  projects: [
+    { name: "setup", testMatch: /setup-wizard\.spec\.ts/, use: { ...devices["Desktop Chrome"] } },
+    { name: "catalog", testMatch: /catalog\.spec\.ts/, dependencies: ["setup"], use: { ...devices["Desktop Chrome"] } },
+  ],
 });
