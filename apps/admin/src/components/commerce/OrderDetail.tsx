@@ -4,15 +4,17 @@ import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Checkbox, Inpu
 import Link from "next/link";
 import { useState } from "react";
 import { api, errorMessage } from "@/lib/api-client";
-import { formatMoney, fromInput, toInput } from "@/lib/money";
+import { formatMoney } from "@/lib/money";
+import { printLabel } from "@/lib/print-label";
+import { FulfillmentsCard, FulfillPanel, RefundPanel, ReturnPanel, ReturnsCard } from "./OrderOperations";
 import { FinancialBadge, FulfillmentBadge, OrderStatusBadge, human } from "./badges";
 
 type Order = Schemas["OrderAdmin"];
-type Panel = "refund" | "cancel" | "shipping" | null;
+type Panel = "fulfil" | "refund" | "return" | "cancel" | "shipping" | null;
 
 /**
- * Order page: lines, totals, payments, timeline with staff comments, tags and note, and the
- * actions (mark paid, refund, cancel with restock/refund, shipping update email).
+ * Order page: lines, totals, payments, fulfillments, returns, timeline with staff comments, tags and
+ * note, and the actions (fulfil, mark paid, refund, return, cancel, invoice, box label).
  */
 export function OrderDetail({ initial }: { initial: Order }) {
   const [order, setOrder] = useState(initial);
@@ -23,6 +25,8 @@ export function OrderDetail({ initial }: { initial: Order }) {
   const id = order.id;
   const refundable = order.amountPaid - order.amountRefunded;
   const open = order.status !== "cancelled";
+  const toFulfil = order.lines.reduce((n, l) => n + l.fulfillableQuantity, 0);
+  const returnable = order.lines.some((l) => l.fulfilledQuantity - l.returnedQuantity > 0);
 
   async function act(label: string, fn: () => Promise<{ data?: Order; error?: unknown }>) {
     setBusy(true);
@@ -50,6 +54,7 @@ export function OrderDetail({ initial }: { initial: Order }) {
         <span className="text-sm text-muted-foreground">{order.placedAt ? new Date(order.placedAt).toLocaleString() : ""}</span>
       </div>
       <div className="flex flex-wrap gap-2">
+        {open && toFulfil > 0 ? <Button onClick={() => setPanel(panel === "fulfil" ? null : "fulfil")}>Fulfil items</Button> : null}
         {open && order.amountPaid < order.total ? (
           <Button
             variant="outline"
@@ -64,6 +69,17 @@ export function OrderDetail({ initial }: { initial: Order }) {
             Refund
           </Button>
         ) : null}
+        {open && returnable ? (
+          <Button variant="outline" onClick={() => setPanel(panel === "return" ? null : "return")}>
+            Create return
+          </Button>
+        ) : null}
+        <a href={`/api/admin/orders/${id}/invoice.pdf`} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center rounded-md border border-input px-4 text-sm font-medium hover:bg-muted">
+          Invoice
+        </a>
+        <Button variant="outline" onClick={() => printLabel(order, null, "A6")}>
+          Print label
+        </Button>
         {open ? (
           <Button variant="outline" onClick={() => setPanel(panel === "shipping" ? null : "shipping")}>
             Send shipping update
@@ -79,7 +95,9 @@ export function OrderDetail({ initial }: { initial: Order }) {
         </a>
       </div>
       {msg ? <Alert variant={msg.ok ? "success" : "error"}>{msg.text}</Alert> : null}
-      {panel === "refund" ? <RefundPanel order={order} busy={busy} onSubmit={(body) => act("Refund issued", () => api.POST("/api/admin/orders/{id}/refunds", { params: { path: { id } }, body }))} /> : null}
+      {panel === "fulfil" ? <FulfillPanel order={order} busy={busy} act={act} /> : null}
+      {panel === "refund" ? <RefundPanel order={order} busy={busy} act={act} /> : null}
+      {panel === "return" ? <ReturnPanel order={order} busy={busy} act={act} /> : null}
       {panel === "cancel" ? <CancelPanel order={order} busy={busy} onSubmit={(body) => act("Order cancelled", () => api.POST("/api/admin/orders/{id}/cancel", { params: { path: { id } }, body }))} /> : null}
       {panel === "shipping" ? (
         <ShippingPanel busy={busy} onSubmit={(body) => act("Shipping update sent", () => api.POST("/api/admin/orders/{id}/shipping-update", { params: { path: { id } }, body }))} />
@@ -105,7 +123,17 @@ export function OrderDetail({ initial }: { initial: Order }) {
                       )}
                       {l.variantTitle ? <span className="text-muted-foreground"> · {l.variantTitle}</span> : null}
                       {l.sku ? <span className="block text-xs text-muted-foreground">SKU {l.sku}</span> : null}
-                      {l.refundedQuantity ? <span className="block text-xs text-muted-foreground">{l.refundedQuantity} refunded</span> : null}
+                      <span className="block text-xs text-muted-foreground">
+                        {[
+                          l.fulfilledQuantity ? `${l.fulfilledQuantity} shipped` : null,
+                          l.fulfillableQuantity && l.fulfilledQuantity ? `${l.fulfillableQuantity} to ship` : null,
+                          l.returnedQuantity ? `${l.returnedQuantity} returned` : null,
+                          l.refundedQuantity ? `${l.refundedQuantity} refunded` : null,
+                          l.giftCard ? "gift card" : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
                     </span>
                     <span className="text-right">
                       {money(l.unitPrice)} × {l.quantity}
@@ -155,6 +183,29 @@ export function OrderDetail({ initial }: { initial: Order }) {
             </CardContent>
           </Card>
 
+          <FulfillmentsCard order={order} busy={busy} act={act} />
+          <ReturnsCard order={order} busy={busy} act={act} />
+          {order.refunds.length ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Refunds</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="grid gap-2 text-sm">
+                  {order.refunds.map((r) => (
+                    <li key={r.id} className="flex flex-wrap justify-between gap-2">
+                      <span>
+                        {new Date(r.createdAt).toLocaleString()} · {human(r.status)}
+                        {r.reason ? ` · ${r.reason}` : ""}
+                        {r.shippingAmount ? ` · incl. shipping ${money(r.shippingAmount)}` : ""}
+                      </span>
+                      <span>{money(r.amount)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          ) : null}
           <Timeline order={order} onChange={setOrder} />
         </div>
 
@@ -205,72 +256,6 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
       <dt>{label}</dt>
       <dd>{value}</dd>
     </div>
-  );
-}
-
-function RefundPanel({ order, busy, onSubmit }: { order: Order; busy: boolean; onSubmit: (b: { amount: number; reason?: string; lines: { orderLineId: string; quantity: number; restock: boolean }[]; notify: boolean }) => void }) {
-  const refundable = order.amountPaid - order.amountRefunded;
-  const [amount, setAmount] = useState(toInput(refundable, order.currency));
-  const [reason, setReason] = useState("");
-  const [qty, setQty] = useState<Record<string, number>>({});
-  const [restock, setRestock] = useState(true);
-  const [notify, setNotify] = useState(true);
-  const minor = fromInput(amount, order.currency);
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Refund</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-3">
-        {order.lines.map((l) => (
-          <label key={l.id} className="flex items-center justify-between gap-3 text-sm">
-            <span>
-              {l.title}
-              {l.variantTitle ? ` · ${l.variantTitle}` : ""}
-            </span>
-            <Input
-              type="number"
-              min={0}
-              max={l.quantity - l.refundedQuantity}
-              value={qty[l.id] ?? 0}
-              onChange={(e) => setQty({ ...qty, [l.id]: Math.max(0, Math.min(l.quantity - l.refundedQuantity, Number(e.target.value) || 0)) })}
-              className="w-20"
-              aria-label={`Quantity of ${l.title} to refund`}
-            />
-          </label>
-        ))}
-        <div className="grid gap-1">
-          <Label htmlFor="refund-amount">Amount ({order.currency}), up to {formatMoney(refundable, order.currency)}</Label>
-          <Input id="refund-amount" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" />
-        </div>
-        <div className="grid gap-1">
-          <Label htmlFor="refund-reason">Reason</Label>
-          <Input id="refund-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
-        </div>
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox checked={restock} onChange={(e) => setRestock(e.target.checked)} /> Restock refunded items
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox checked={notify} onChange={(e) => setNotify(e.target.checked)} /> Email the customer
-        </label>
-        <Button
-          loading={busy}
-          disabled={!minor || Number.isNaN(minor) || minor > refundable}
-          onClick={() =>
-            onSubmit({
-              amount: minor!,
-              ...(reason ? { reason } : {}),
-              lines: Object.entries(qty)
-                .filter(([, q]) => q > 0)
-                .map(([orderLineId, quantity]) => ({ orderLineId, quantity, restock })),
-              notify,
-            })
-          }
-        >
-          Refund {minor && !Number.isNaN(minor) ? formatMoney(minor, order.currency) : ""}
-        </Button>
-      </CardContent>
-    </Card>
   );
 }
 

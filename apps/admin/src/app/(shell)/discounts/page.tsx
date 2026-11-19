@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { DiscountsManager } from "@/components/commerce/DiscountsManager";
 import { serverApi } from "@/lib/api-server";
-import { requireMe } from "@/lib/session";
+import { can, requireMe } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Discounts" };
 
@@ -10,5 +10,5 @@ export default async function DiscountsPage() {
   const api = await serverApi();
   const list = await api.GET("/api/admin/discounts");
   if (!list.data) return <p>You do not have access to discounts.</p>;
-  return <DiscountsManager initial={list.data.items} currency={me.store.currency ?? "USD"} />;
+  return <DiscountsManager initial={list.data.items} currency={me.store.currency ?? "USD"} canWrite={can(me, "discounts:write")} />;
 }
