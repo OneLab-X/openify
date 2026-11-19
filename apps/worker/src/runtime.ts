@@ -11,6 +11,7 @@ import {
   sweepExpiredReservations,
   processMedia,
   routeOutboxEvent,
+  rollupRecentAnalytics,
   runJob,
   type CoreDeps,
   type Logger,
@@ -38,7 +39,7 @@ export interface WorkerRuntime {
   workers: Worker[];
   /** One dispatcher pass; returns how many events were published. */
   dispatchOnce(): Promise<number>;
-  /** Registers repeatable jobs (abandoned-checkout scan + reservation sweep). */
+  /** Registers repeatable jobs (abandoned-checkout scan + reservation sweep, analytics rollup). */
   scheduleRecurring(): Promise<void>;
   close(): Promise<void>;
 }
@@ -128,6 +129,13 @@ export function createRuntime(config: WorkerConfig, logger: Logger, env: Record<
       if (reminders || released) logger.info({ reminders, released }, "abandoned-cart scan");
       return { reminders, released };
     },
+    // Repeatable: analytics_daily first-party columns for today and yesterday (dashboard funnel, SPEC §12).
+    analytics: async (job) => {
+      if (job.name !== "rollup") return { status: "skipped", reason: `unknown analytics job ${job.name}` };
+      const store = await getInstallStore(deps.db);
+      if (!store || store.status !== "active") return { status: "skipped", reason: "no active store" };
+      return { status: "rolled_up", days: await rollupRecentAnalytics(deps.db, store.id) };
+    },
   };
   const concurrency: Partial<Record<QueueName, number>> = { images: config.IMAGE_CONCURRENCY, imports: 1, "media-migration": 1 };
 
@@ -154,6 +162,7 @@ export function createRuntime(config: WorkerConfig, logger: Logger, env: Record<
     },
     async scheduleRecurring() {
       await queue("abandoned-cart").upsertJobScheduler("scan", { every: config.ABANDONED_SCAN_INTERVAL_MS }, { name: "scan", data: {} });
+      await queue("analytics").upsertJobScheduler("rollup", { every: config.ANALYTICS_ROLLUP_INTERVAL_MS }, { name: "rollup", data: {} });
     },
     async close() {
       await Promise.all(workers.map((w) => w.close()));

@@ -286,3 +286,20 @@ export async function rollupAnalyticsDay(db: Executor, storeId: string, day: str
     .onConflictDoUpdate({ target: [analyticsDaily.storeId, analyticsDaily.day], set: values });
   return values;
 }
+
+/** Store-timezone calendar day (YYYY-MM-DD) of an instant. */
+export function dayInZone(at: Date, timezone: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
+  } catch {
+    return at.toISOString().slice(0, 10);
+  }
+}
+
+/** Worker job: refreshes today and yesterday (late payments, timezone edges) for the store. */
+export async function rollupRecentAnalytics(db: Executor, storeId: string, at: Date = new Date()) {
+  const { tz } = await tzOf(db, storeId);
+  const today = dayInZone(at, tz);
+  const yesterday = addDays(today, -1);
+  return { [yesterday]: await rollupAnalyticsDay(db, storeId, yesterday), [today]: await rollupAnalyticsDay(db, storeId, today) };
+}

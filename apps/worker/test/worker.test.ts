@@ -18,7 +18,7 @@ import {
   upsertCredential,
   uploadMedia,
 } from "@shopkit/core";
-import { checkouts, eq, inventoryItems, inventoryLevels, media as mediaTable, orders, outboxEvents, productVariants, sql, stores } from "@shopkit/db";
+import { analyticsDaily, and, checkouts, eq, inventoryItems, inventoryLevels, media as mediaTable, orders, outboxEvents, productVariants, sql, stores } from "@shopkit/db";
 import type { ProviderDefinition } from "@shopkit/providers";
 import { z } from "zod";
 import sharp from "sharp";
@@ -183,4 +183,19 @@ describe("worker", () => {
     expect(co!.abandonedNotifiedAt).not.toBeNull();
     expect((await rt.deps.db.select().from(outboxEvents)).some((e) => e.type === "checkout.abandoned")).toBe(true);
   }, 60_000);
+
+  it("rolls up analytics_daily for the funnel from the repeatable analytics job", async () => {
+    const [store] = await rt.deps.db.select().from(stores);
+    await rt.scheduleRecurring();
+    const q = rt.queues.get("analytics")!;
+    expect((await q.getJobSchedulers()).map((s) => s.key)).toContain("rollup");
+    const job = await q.add("rollup", {});
+    for (let i = 0; i < 50 && !(await job.isCompleted()); i++) await new Promise((r) => setTimeout(r, 200));
+    const today = new Date().toISOString().slice(0, 10);
+    const [row] = await rt.deps.db.select().from(analyticsDaily).where(and(eq(analyticsDaily.storeId, store!.id), eq(analyticsDaily.day, today)));
+    // The earlier test in this file added a cart line and started a checkout today.
+    expect(row).toMatchObject({ addToCarts: expect.any(Number), checkoutsStarted: expect.any(Number) });
+    expect(row!.addToCarts).toBeGreaterThan(0);
+    expect(row!.checkoutsStarted).toBeGreaterThan(0);
+  }, 30_000);
 });
