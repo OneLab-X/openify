@@ -13,8 +13,8 @@ const envSchema = z.object({
   REVALIDATE_SECRET: z.string().min(16).optional(),
   SHOPKIT_DATA_DIR: z.string().default("./data"),
   /** Optional Meilisearch (compose profile `meilisearch`); Postgres full-text is used without it. */
-  MEILISEARCH_URL: z.url().optional(),
-  MEILISEARCH_API_KEY: z.string().optional(),
+  MEILISEARCH_URL: z.preprocess((v) => (v === "" ? undefined : v), z.url().optional()),
+  MEILISEARCH_API_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
   TRUST_PROXY: z
     .string()
     .default("true")

@@ -1,6 +1,7 @@
 # Shopkit production stack. Configure with .env (generate it with ./scripts/install.sh).
 #   docker compose up -d --build --wait
 #   docker compose --profile minio up -d     # adds a local S3-compatible object store
+#   docker compose --profile meilisearch up -d  # Meilisearch storefront search (set MEILISEARCH_URL)
 name: shopkit
 
 x-app-env: &app-env
@@ -13,6 +14,9 @@ x-app-env: &app-env
   SHOPKIT_MASTER_KEY_VERSION: ${SHOPKIT_MASTER_KEY_VERSION:-1}
   SHOPKIT_DATA_DIR: /data
   LOG_LEVEL: ${LOG_LEVEL:-info}
+  # Empty unless the meilisearch profile is enabled (Postgres full-text search is the default).
+  MEILISEARCH_URL: ${MEILISEARCH_URL:-}
+  MEILISEARCH_API_KEY: ${MEILISEARCH_MASTER_KEY:-}
 
 services:
   postgres:
@@ -62,6 +66,8 @@ services:
       <<: *app-env
       PORT: "4000"
       TRUST_PROXY: "true"
+      # Lets the storefront's server-side requests skip the per-IP rate limit.
+      REVALIDATE_SECRET: ${REVALIDATE_SECRET:?run scripts/install.sh}
     volumes:
       - shopkit-data:/data
     depends_on:
@@ -142,6 +148,24 @@ services:
       timeout: 3s
       retries: 10
 
+  # Optional storefront search engine. Enable with COMPOSE_PROFILES=meilisearch and
+  # MEILISEARCH_URL=http://meilisearch:7700 in .env, then `docker compose exec api node dist/cli.js search:reindex`.
+  meilisearch:
+    image: getmeili/meilisearch:v1.27.0
+    profiles: ["meilisearch"]
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: ${MEILISEARCH_MASTER_KEY:-change-me-to-a-long-random-key}
+      MEILI_ENV: production
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - meili-data:/meili_data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:7700/health || wget -q --spider http://127.0.0.1:7700/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
 volumes:
   postgres-data:
   redis-data:
@@ -149,3 +173,4 @@ volumes:
   caddy-data:
   caddy-config:
   minio-data:
+  meili-data:

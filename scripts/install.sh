@@ -37,6 +37,10 @@ SHOPKIT_MASTER_KEY_VERSION=1
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
 SESSION_SECRET=$(openssl rand -hex 32)
 REVALIDATE_SECRET=$(openssl rand -hex 24)
+MEILISEARCH_MASTER_KEY=$(openssl rand -hex 24)
+# Optional Meilisearch: uncomment both lines (Postgres full-text search is used otherwise).
+# COMPOSE_PROFILES=meilisearch
+# MEILISEARCH_URL=http://meilisearch:7700
 ENV
   echo
   red "IMPORTANT: back up .env now. Losing SHOPKIT_MASTER_KEY makes stored provider secrets unrecoverable."
