@@ -1,5 +1,5 @@
 import { render } from "@react-email/render";
-import { cartLines, checkouts, carts, eq, refunds } from "@shopkit/db";
+import { cartLines, checkouts, carts, eq, giftCards, refunds } from "@shopkit/db";
 import type { ReactElement } from "react";
 import type { CoreDeps } from "../deps.js";
 import { z } from "zod";
@@ -31,6 +31,10 @@ export const NOTIFICATION_TEMPLATES = {
   refund: { title: "Refund", audience: "customer", subject: "Refund for order {{order_name}}", intro: "We've issued a refund for your order. It can take a few business days to appear on your statement." },
   customer_otp: { title: "Sign-in code", audience: "customer", subject: "{{code}} is your {{shop_name}} sign-in code", intro: "Use this code to sign in. It expires in {{minutes}} minutes. If you didn't ask for it, you can ignore this email." },
   abandoned_checkout: { title: "Abandoned checkout", audience: "customer", subject: "You left something in your cart", intro: "Your items are still waiting for you. Complete your purchase whenever you're ready." },
+  delivery_update: { title: "Delivery update", audience: "customer", subject: "Order {{order_name}}: {{status}}", intro: "Here's the latest on your delivery." },
+  return_update: { title: "Return update", audience: "customer", subject: "Your return for order {{order_name}}", intro: "There's an update on your return." },
+  gift_card_issued: { title: "Gift card", audience: "customer", subject: "Your {{shop_name}} gift card", intro: "You've received a gift card. Use the code below at checkout." },
+  staff_invite: { title: "Staff invitation", audience: "merchant", subject: "You've been invited to {{shop_name}}", intro: "You've been invited to help run {{shop_name}}. Accept the invitation to set your password." },
   merchant_new_order: { title: "New order (staff alert)", audience: "merchant", subject: "[{{shop_name}}] New order {{order_name}}", intro: "You have a new order." },
   merchant_order_paid: { title: "Order paid (staff alert)", audience: "merchant", subject: "[{{shop_name}}] Order {{order_name}} paid", intro: "Payment was received for an order." },
 } as const;
@@ -102,6 +106,45 @@ export async function renderNotification(deps: CoreDeps, storeId: string, templa
     return { subject: fill(settings.subject, vars), html, text };
   }
 
+  if (template === "gift_card_issued") {
+    const [card] = await deps.db.select().from(giftCards).where(eq(giftCards.id, str(data.giftCardId)));
+    if (!card) return null;
+    const intro = fill(settings.intro, vars);
+    const { html, text } = await renderBoth(
+      layout(
+        intro,
+        <>
+          <H1>{`A ${formatMinor(card.initialValue, card.currency)} gift card for you`}</H1>
+          <P>{intro}</P>
+          <p style={{ fontSize: 24, letterSpacing: 3, fontWeight: 700, margin: "16px 0", fontFamily: "monospace" }}>{str(data.code)}</p>
+          {card.expiresAt ? <P muted>{`Valid until ${card.expiresAt.toISOString().slice(0, 10)}.`}</P> : null}
+          <Button href={deps.runtime.publicUrl} color={accent}>
+            Start shopping
+          </Button>
+        </>,
+      ),
+    );
+    return { subject: fill(settings.subject, vars), html, text };
+  }
+
+  if (template === "staff_invite") {
+    const intro = fill(settings.intro, vars);
+    const { html, text } = await renderBoth(
+      layout(
+        intro,
+        <>
+          <H1>{`Join ${shop.name}`}</H1>
+          <P>{intro}</P>
+          <Button href={str(data.acceptUrl)} color={accent}>
+            Accept invitation
+          </Button>
+          <P muted>This invitation expires in 7 days.</P>
+        </>,
+      ),
+    );
+    return { subject: fill(settings.subject, vars), html, text };
+  }
+
   if (template === "abandoned_checkout") {
     const checkoutId = str(data.checkoutId ?? "");
     const [row] = await deps.db.select({ checkout: checkouts, cart: carts }).from(checkouts).innerJoin(carts, eq(carts.id, checkouts.cartId)).where(eq(checkouts.id, checkoutId));
@@ -135,6 +178,7 @@ export async function renderNotification(deps: CoreDeps, storeId: string, templa
   if (!order) return null;
   vars.order_name = order.name || "";
   vars.customer_name = order.shippingAddress?.firstName ?? "";
+  vars.status = str(data.statusLabel ?? "");
   const money = (n: number) => formatMinor(n, order.currency);
   const lines: EmailLine[] = order.lines.map((l) => ({ title: l.title, variantTitle: l.variantTitle, quantity: l.quantity, total: money(l.unitPrice * l.quantity) }));
   const totals = [
@@ -189,6 +233,23 @@ export async function renderNotification(deps: CoreDeps, storeId: string, templa
       );
       break;
     }
+    case "delivery_update":
+      heading = str(data.statusLabel) || `Update on order ${order.name}`;
+      extra = (
+        <>
+          {str(data.description) ? <P>{str(data.description)}</P> : null}
+          {typeof data.trackingUrl === "string" && data.trackingUrl ? (
+            <Button href={data.trackingUrl} color={accent}>
+              Track your package
+            </Button>
+          ) : null}
+        </>
+      );
+      break;
+    case "return_update":
+      heading = str(data.heading) || `Return for order ${order.name}`;
+      extra = str(data.message) ? <P>{str(data.message)}</P> : null;
+      break;
     case "refund": {
       const [refund] = data.refundId ? await deps.db.select().from(refunds).where(eq(refunds.id, str(data.refundId))) : [];
       heading = "Your refund is on its way";

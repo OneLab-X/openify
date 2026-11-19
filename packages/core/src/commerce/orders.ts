@@ -19,7 +19,6 @@ import {
   productVariants,
   products,
   providerCredentials,
-  refundLines,
   refunds,
   sql,
   transactions,
@@ -33,7 +32,6 @@ import { writeAudit } from "../audit.js";
 import { applyInventoryChanges, type QuantityChange } from "../catalog/inventory.js";
 import { mediaByIds, mediaView } from "../catalog/media-view.js";
 import { refreshProducts } from "../catalog/refresh.js";
-import { loadProvider } from "../credentials.js";
 import type { Actor, CoreDeps } from "../deps.js";
 import { now, SYSTEM } from "../deps.js";
 import { AppError, notFound } from "../errors.js";
@@ -41,6 +39,8 @@ import { enqueueEvent } from "../outbox.js";
 import { getSetting } from "../settings.js";
 import { ensureCustomerForOrder, refreshCustomerStats } from "./customers.js";
 import { recordDiscountUsage } from "./discounts.js";
+import { refundOrder } from "./refunds.js";
+import { issueGiftCardsForOrder, recordGiftCardSale, reverseGiftCardRedemptions } from "./gift-cards.js";
 import type { Pricing } from "./pricing.js";
 
 export type OrderRow = typeof orders.$inferSelect;
@@ -61,9 +61,9 @@ export const orderStatusUrl = (deps: Pick<CoreDeps, "runtime">, orderId: string)
 
 // ── Numbering ────────────────────────────────────────────────────────────────
 /** Per-store sequences; the row lock serialises concurrent placements. */
-export async function nextNumber(tx: Executor, storeId: string, kind: "order" | "draft"): Promise<number> {
+export async function nextNumber(tx: Executor, storeId: string, kind: "order" | "draft" | "invoice"): Promise<number> {
   await tx.insert(orderSequences).values({ storeId }).onConflictDoNothing();
-  const col = kind === "order" ? sql`next_order` : sql`next_draft`;
+  const col = kind === "order" ? sql`next_order` : kind === "draft" ? sql`next_draft` : sql`next_invoice`;
   const { rows } = await tx.execute<{ n: number }>(sql`update ${orderSequences} set ${col} = ${col} + 1 where store_id = ${storeId} returning ${col} - 1 as n`);
   return rows[0]!.n;
 }
@@ -116,6 +116,7 @@ export async function writeOrderLines(tx: Executor, storeId: string, orderId: st
       taxLines: l.taxLines,
       requiresShipping: l.requiresShipping,
       taxable: l.taxable,
+      giftCard: l.giftCard,
       attributes: l.attributes,
       position: i,
     })),
@@ -132,8 +133,9 @@ export function totalsFromPricing(p: Pricing) {
     total: p.total,
     taxesIncluded: p.taxesIncluded,
     taxLines: p.taxLines,
-    discountApplications: p.discount.application ? [p.discount.application] : [],
+    discountApplications: p.discounts,
     shippingLine: p.shippingLine,
+    giftCardTotal: p.giftCardTotal,
   };
 }
 
@@ -219,6 +221,7 @@ export async function releaseExpiredReservation(deps: CoreDeps, storeId: string,
     const order = await lockOrder(tx, storeId, orderId);
     if (order.placedAt || order.inventoryState !== "reserved" || !order.reservationExpiresAt || order.reservationExpiresAt > now(deps)) return false;
     await releaseInventory(tx, storeId, order, { restock: true, note: `Unpaid checkout ${order.id} expired` });
+    await reverseGiftCardRedemptions(tx, storeId, order.id, { type: "system" }, "Unpaid checkout expired");
     await addOrderEvent(tx, storeId, order.id, "reservation_released", "Reserved stock released: payment not received in time", { type: "system" });
     return true;
   });
@@ -237,7 +240,7 @@ export async function sweepExpiredReservations(deps: CoreDeps): Promise<number> 
 }
 
 // ── Placement and payment state ──────────────────────────────────────────────
-function financialFor(o: Pick<OrderRow, "amountPaid" | "amountRefunded" | "total" | "financialStatus">): OrderRow["financialStatus"] {
+export function financialFor(o: Pick<OrderRow, "amountPaid" | "amountRefunded" | "total" | "financialStatus">): OrderRow["financialStatus"] {
   if (o.amountRefunded > 0) return o.amountRefunded >= o.amountPaid ? "refunded" : "partially_refunded";
   if (o.amountPaid > 0) return o.amountPaid >= o.total ? "paid" : "partially_paid";
   return o.financialStatus === "authorized" ? "authorized" : o.financialStatus === "voided" ? "voided" : "pending";
@@ -261,8 +264,16 @@ export async function placeOrder(tx: Executor, deps: CoreDeps, order: OrderRow, 
   await tx.update(orders).set({ number, name, placedAt: at, customerId, reservationExpiresAt: null }).where(eq(orders.id, order.id));
   Object.assign(order, { number, name, placedAt: at, customerId, reservationExpiresAt: null });
   for (const d of order.discountApplications) {
-    if (d.discountId) await recordDiscountUsage(tx, order.storeId, { discountId: d.discountId, codeId: null, orderId: order.id, email: order.email, customerId });
+    if (d.discountId) await recordDiscountUsage(tx, order.storeId, { discountId: d.discountId, codeId: d.codeId ?? null, orderId: order.id, email: order.email, customerId });
   }
+  if (await recordGiftCardSale(tx, order.storeId, order, at)) {
+    const amountPaid = order.amountPaid + order.giftCardTotal;
+    const financialStatus = financialFor({ ...order, amountPaid });
+    await tx.update(orders).set({ amountPaid, financialStatus }).where(eq(orders.id, order.id));
+    Object.assign(order, { amountPaid, financialStatus });
+    await addOrderEvent(tx, order.storeId, order.id, "payment_captured", `Payment of ${formatMinor(order.giftCardTotal, order.currency)} with gift card`, opts.actor);
+  }
+  if (order.amountPaid >= order.total) await issueGiftCardsForOrder(tx, order.storeId, { ...order, customerId });
   if (order.checkoutId) {
     const [co] = await tx.update(checkouts).set({ status: "completed", completedAt: at, customerId }).where(eq(checkouts.id, order.checkoutId)).returning({ cartId: checkouts.cartId });
     if (co) await tx.update(carts).set({ completedAt: at }).where(eq(carts.id, co.cartId));
@@ -310,7 +321,7 @@ export async function applyPaymentResult(tx: Executor, deps: CoreDeps, order: Or
       .onConflictDoNothing()
       .returning({ id: transactions.id });
     if (inserted.length === 0) return { changed: false };
-    if (result.currency !== order.currency || (kind === "sale" && result.amount !== order.total)) {
+    if (result.currency !== order.currency || (kind === "sale" && result.amount !== order.total - order.giftCardTotal)) {
       await addOrderEvent(tx, order.storeId, order.id, "payment_mismatch", `Payment of ${money} does not match the order total ${formatMinor(order.total, order.currency)}`, actor, {
         amount: result.amount,
         currency: result.currency,
@@ -334,6 +345,7 @@ export async function applyPaymentResult(tx: Executor, deps: CoreDeps, order: Or
         await placeOrder(tx, deps, order, { paid: true, actor });
       }
     } else if (kind === "sale") {
+      if (order.amountPaid >= order.total) await issueGiftCardsForOrder(tx, order.storeId, order);
       await refreshCustomerStats(tx, order.customerId);
       await enqueueEvent(tx, { storeId: order.storeId, type: "order.paid", payload: { orderId: order.id } });
     }
@@ -368,39 +380,6 @@ export async function applyPaymentResult(tx: Executor, deps: CoreDeps, order: Or
   return { changed: false };
 }
 
-/** A refund that happened at the provider (dashboard or our own call), recorded once by refund id. */
-export async function applyProviderRefund(tx: Executor, deps: CoreDeps, order: OrderRow, refund: { id: string; amount: number; currency: string }, provider: string, mode: "test" | "live" | null) {
-  const inserted = await tx
-    .insert(transactions)
-    .values({
-      storeId: order.storeId,
-      orderId: order.id,
-      kind: "refund",
-      status: "success",
-      amount: refund.amount,
-      currency: refund.currency,
-      provider,
-      mode,
-      providerReference: refund.id,
-      processedAt: now(deps),
-    })
-    .onConflictDoNothing()
-    .returning({ id: transactions.id });
-  if (inserted.length === 0) return { changed: false };
-  const amountRefunded = order.amountRefunded + refund.amount;
-  const financialStatus = financialFor({ ...order, amountRefunded });
-  await tx.update(orders).set({ amountRefunded, financialStatus }).where(eq(orders.id, order.id));
-  Object.assign(order, { amountRefunded, financialStatus });
-  const [row] = await tx
-    .insert(refunds)
-    .values({ storeId: order.storeId, orderId: order.id, amount: refund.amount, currency: refund.currency, reason: "Refunded at the payment provider", transactionId: inserted[0]!.id })
-    .returning({ id: refunds.id });
-  await addOrderEvent(tx, order.storeId, order.id, "refunded", `Refund of ${formatMinor(refund.amount, refund.currency)} recorded from ${provider}`, { type: "provider" });
-  await refreshCustomerStats(tx, order.customerId);
-  await enqueueEvent(tx, { storeId: order.storeId, type: "order.refunded", payload: { orderId: order.id, refundId: row!.id, notify: true } });
-  return { changed: true };
-}
-
 // ── Staff actions ────────────────────────────────────────────────────────────
 export const markPaidInput = z.object({ note: z.string().trim().max(500).optional() });
 
@@ -432,117 +411,11 @@ export async function markOrderPaid(deps: CoreDeps, actor: Actor, storeId: strin
       .returning({ id: transactions.id });
     const amountPaid = order.amountPaid + due;
     await tx.update(orders).set({ amountPaid, financialStatus: financialFor({ ...order, amountPaid }) }).where(eq(orders.id, orderId));
+    await issueGiftCardsForOrder(tx, storeId, order);
     await addOrderEvent(tx, storeId, orderId, "marked_paid", `Marked as paid (${formatMinor(due, order.currency)})${note ? `: ${note}` : ""}`, staffActor(actor), { transactionId: txRow!.id });
     await refreshCustomerStats(tx, order.customerId);
     await enqueueEvent(tx, { storeId, type: "order.paid", payload: { orderId } });
     await writeAudit(tx, actor, { storeId, action: "order.marked_paid", resourceType: "order", resourceId: orderId });
-  });
-}
-
-export const refundInput = z.object({
-  amount: z.number().int().min(1),
-  reason: z.string().trim().max(500).optional(),
-  lines: z.array(z.object({ orderLineId: z.uuid(), quantity: z.number().int().min(1), restock: z.boolean().default(true) })).max(250).default([]),
-  notify: z.boolean().default(true),
-});
-export type RefundInput = z.input<typeof refundInput>;
-
-/**
- * Refunds through the provider that took the payment (or records a manual refund for COD/bank
- * transfer). The provider call happens before anything is written, keyed by our refund id.
- */
-export async function refundOrder(deps: CoreDeps, actor: Actor, storeId: string, orderId: string, input: RefundInput) {
-  const data = refundInput.parse(input);
-  const [order] = await deps.db.select().from(orders).where(and(eq(orders.storeId, storeId), eq(orders.id, orderId)));
-  if (!order?.placedAt) throw notFound("Order");
-  const refundable = order.amountPaid - order.amountRefunded;
-  if (data.amount > refundable) throw new AppError("validation_failed", `You can refund at most ${formatMinor(refundable, order.currency)}`);
-  const lines = data.lines.length ? await deps.db.select().from(orderLines).where(and(eq(orderLines.orderId, orderId), inArray(orderLines.id, data.lines.map((l) => l.orderLineId)))) : [];
-  for (const l of data.lines) {
-    const line = lines.find((x) => x.id === l.orderLineId);
-    if (!line) throw notFound("Order line");
-    if (l.quantity > line.quantity - line.refundedQuantity) throw new AppError("validation_failed", `Too many of ${line.title} refunded`);
-  }
-
-  const refundId = uuidv7();
-  const [sale] = await deps.db
-    .select()
-    .from(transactions)
-    .where(and(eq(transactions.orderId, orderId), eq(transactions.kind, "sale"), eq(transactions.status, "success")))
-    .orderBy(desc(transactions.amount))
-    .limit(1);
-  let providerTx: { id: string; status: "pending" | "success" | "failure"; provider: string; mode: "test" | "live" | null };
-  const online = sale && !sale.providerReference?.startsWith("manual:") && sale.mode;
-  if (online) {
-    const provider = await loadProvider(deps, { storeId, kind: "payment", provider: sale.provider, mode: sale.mode! });
-    if (!provider) throw new AppError("conflict", `${sale.provider} is not configured any more; refund it in the provider's dashboard`);
-    try {
-      const t = await provider.refund(sale.providerReference!, data.amount, data.reason, refundId);
-      if (t.status === "failure") throw new AppError("provider_error", "The payment provider declined the refund");
-      providerTx = { id: t.id, status: t.status, provider: sale.provider, mode: sale.mode };
-    } catch (err) {
-      if (err instanceof AppError) throw err;
-      throw new AppError("provider_error", err instanceof Error ? err.message : "Refund failed");
-    }
-  } else {
-    providerTx = { id: `manual:${refundId}`, status: "success", provider: sale?.provider ?? order.paymentProvider ?? "manual", mode: order.paymentMode };
-  }
-
-  return deps.db.transaction(async (tx) => {
-    const locked = await lockOrder(tx, storeId, orderId);
-    const [txRow] = await tx
-      .insert(transactions)
-      .values({
-        storeId,
-        orderId,
-        kind: "refund",
-        status: providerTx.status,
-        amount: data.amount,
-        currency: order.currency,
-        provider: providerTx.provider,
-        mode: providerTx.mode,
-        providerReference: providerTx.id,
-        parentId: sale?.id ?? null,
-        createdBy: actor.id ?? null,
-        processedAt: now(deps),
-      })
-      .onConflictDoNothing()
-      .returning({ id: transactions.id });
-    const amountRefunded = locked.amountRefunded + data.amount;
-    await tx.update(orders).set({ amountRefunded, financialStatus: financialFor({ ...locked, amountRefunded }) }).where(eq(orders.id, orderId));
-    await tx.insert(refunds).values({
-      id: refundId,
-      storeId,
-      orderId,
-      amount: data.amount,
-      currency: order.currency,
-      reason: data.reason ?? null,
-      restock: data.lines.some((l) => l.restock),
-      transactionId: txRow?.id ?? null,
-      createdBy: actor.id ?? null,
-    });
-    const restock: QuantityChange[] = [];
-    for (const l of data.lines) {
-      const line = lines.find((x) => x.id === l.orderLineId)!;
-      await tx.insert(refundLines).values({ storeId, refundId, orderLineId: line.id, quantity: l.quantity, restock: l.restock });
-      const restockable = l.restock && line.inventoryItemId && line.locationId && locked.inventoryState === "reserved" ? Math.min(l.quantity, line.quantity - line.restockedQuantity) : 0;
-      await tx
-        .update(orderLines)
-        .set({ refundedQuantity: line.refundedQuantity + l.quantity, restockedQuantity: line.restockedQuantity + restockable })
-        .where(eq(orderLines.id, line.id));
-      if (restockable > 0) {
-        restock.push(
-          { inventoryItemId: line.inventoryItemId!, locationId: line.locationId!, quantity: "committed", delta: -restockable },
-          { inventoryItemId: line.inventoryItemId!, locationId: line.locationId!, quantity: "available", delta: restockable },
-        );
-      }
-    }
-    if (restock.length) await touchProducts(tx, storeId, await applyInventoryChanges(tx, actor, storeId, restock, "restock", `Refund on ${order.name}`));
-    await addOrderEvent(tx, storeId, orderId, "refunded", `Refunded ${formatMinor(data.amount, order.currency)}${data.reason ? `: ${data.reason}` : ""}${providerTx.status === "pending" ? " (pending at provider)" : ""}`, staffActor(actor), { refundId });
-    await refreshCustomerStats(tx, locked.customerId);
-    await enqueueEvent(tx, { storeId, type: "order.refunded", payload: { orderId, refundId, notify: data.notify } });
-    await writeAudit(tx, actor, { storeId, action: "order.refunded", resourceType: "order", resourceId: orderId, metadata: { amount: data.amount } });
-    return { refundId, status: providerTx.status };
   });
 }
 
@@ -562,7 +435,7 @@ export async function cancelOrder(deps: CoreDeps, actor: Actor, storeId: string,
   if (order.status === "cancelled") throw new AppError("conflict", "The order is already cancelled");
   if (order.fulfillmentStatus !== "unfulfilled") throw new AppError("conflict", "Fulfilled orders cannot be cancelled; refund them instead");
   const refundable = order.amountPaid - order.amountRefunded;
-  if (data.refund && refundable > 0) await refundOrder(deps, actor, storeId, orderId, { amount: refundable, reason: "Order cancelled", notify: false });
+  if (data.refund && refundable > 0) await refundOrder(deps, actor, storeId, orderId, { amount: refundable, reason: "Order cancelled", notify: false, fullShipping: true });
   await deps.db.transaction(async (tx) => {
     const locked = await lockOrder(tx, storeId, orderId);
     await releaseInventory(tx, storeId, locked, { restock: data.restock, note: `Cancelled ${locked.name}` });

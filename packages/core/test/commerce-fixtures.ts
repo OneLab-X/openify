@@ -22,7 +22,13 @@ interface FakeOrder {
   reference: string;
   payment?: PaymentResult;
 }
-export const fakepayState = { orders: new Map<string, FakeOrder>(), sessions: [] as { amount: number; orderId: string }[], refunds: [] as { paymentId: string; amount: number; key?: string }[] };
+export const fakepayState = {
+  orders: new Map<string, FakeOrder>(),
+  sessions: [] as { amount: number; orderId: string }[],
+  refunds: [] as { paymentId: string; amount: number; key?: string }[],
+  /** What the next refund call reports (Phase 4: pending refunds settle by webhook). */
+  refundStatus: "success" as "success" | "pending",
+};
 
 const sign = (s: string, secret: string) => createHmac("sha256", secret).update(s).digest("hex");
 
@@ -57,7 +63,7 @@ export const fakepay: ProviderDefinition<"payment", { keyId: string }, { keySecr
     },
     refund: (paymentId, amount, _reason, key) => {
       fakepayState.refunds.push({ paymentId, amount, ...(key ? { key } : {}) });
-      return Promise.resolve({ id: `fp_refund_${fakepayState.refunds.length}`, kind: "refund", status: "success", amount, currency: "INR" });
+      return Promise.resolve({ id: `fp_refund_${fakepayState.refunds.length}`, kind: "refund", status: fakepayState.refundStatus, amount, currency: "INR" });
     },
     getPayment: () => Promise.reject(new Error("not used")),
   }),
@@ -97,6 +103,7 @@ export async function commerceStore(deps: TestDeps) {
   fakepayState.orders.clear();
   fakepayState.sessions.length = 0;
   fakepayState.refunds.length = 0;
+  fakepayState.refundStatus = "success";
   const storeId = await makeStore(deps);
   await setSetting(deps.db, storeId, "tax.config", { mode: "india_gst", pricesIncludeTax: false, defaultRateBps: 1800, registeredState: "Karnataka" });
   await setSetting(deps.db, storeId, "shipping.defaults", { zoneName: "India", countries: ["IN"], rateName: "Standard", rateAmount: 5_000, freeOver: 200_000 });
@@ -111,4 +118,10 @@ export async function commerceStore(deps: TestDeps) {
 export async function orderRow(deps: TestDeps, id: string) {
   const [o] = await deps.db.select().from(orders).where(eq(orders.id, id));
   return o!;
+}
+
+/** A signed FakePay refund webhook (processed or failed). */
+export function refundWebhook(refundId: string, amount: number, status: "refund.processed" | "refund.failed" = "refund.processed") {
+  const body = Buffer.from(JSON.stringify({ id: `evt_${refundId}_${status}`, type: status, payment: null, refund: { id: refundId, amount, status } }));
+  return { body, headers: { "x-fakepay-signature": sign(body.toString(), FAKEPAY_WEBHOOK_SECRET) } };
 }

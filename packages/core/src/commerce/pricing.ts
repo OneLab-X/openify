@@ -14,15 +14,25 @@ import {
   type ShippingLine,
   type TaxLine,
 } from "@shopkit/db";
+import type { CoreDeps } from "../deps.js";
 import { getSetting } from "../settings.js";
 import { getStore } from "../stores.js";
-import { resolveDiscountCode, type ResolvedDiscount } from "./discounts.js";
+import { allocate, applyDiscounts, roundHalf, type EngineLine } from "./discount-engine.js";
+import { loadDiscountCandidates } from "./discounts.js";
+import { applyGiftCardBalances, resolveGiftCards, type AppliedGiftCard } from "./gift-cards.js";
+import { quoteShipping, toGrams, type ShippingOption } from "./shipping.js";
+import { loadTaxContext, mergeTaxLines, rateForLine, splitTax, taxOn } from "./tax.js";
+
 
 /**
- * The single pricing function (SPEC §1.6, Phase 3): cart, checkout, order creation and draft orders
- * all call `priceLines`. Every amount comes from the database; the browser only sends variant ids,
- * quantities and choices. Discounts are allocated to lines before tax so tax is on the discounted
- * price; rounding is per line, half away from zero, in integer minor units.
+ * The single pricing function (SPEC §1.6): cart, checkout, order creation and draft orders all
+ * call `priceLines`. Every amount comes from the database; the browser only sends variant ids,
+ * quantities and choices. Phase 4: the discount engine (codes + automatic, combinations), shipping
+ * zones and rates, per-region tax rates with collection overrides, and gift cards.
+ *
+ * Order of operations: line subtotals → discounts (product, then order, then shipping class) →
+ * shipping → tax per line on the discounted price (rounded half away from zero) → total →
+ * gift cards (a payment method, applied after tax).
  */
 export interface PriceLineInput {
   variantId: string;
@@ -36,13 +46,17 @@ export interface PricingInput {
   lines: PriceLineInput[];
   shippingAddress?: MailingAddress | null;
   shippingRateId?: string | null;
+  /** One entered code (carts) … */
   discountCode?: string | null;
-  /** Draft orders: a staff-entered order discount instead of a code. */
+  /** … or several (API / drafts). */
+  discountCodes?: string[];
+  /** Draft orders: a staff-entered order discount instead of codes and automatic discounts. */
   manualDiscount?: { kind: "percentage" | "fixed_amount"; value: number; reason?: string | null } | null;
   /** Draft orders: a staff-entered shipping charge (null = none) instead of the store rates. */
   customShipping?: { title: string; amount: number } | null;
+  giftCardCodes?: string[];
   customer?: { id?: string | null; email?: string | null };
-  /** The order being re-priced, so its own discount use does not count against "once per customer". */
+  /** The order being re-priced, so its own discount use does not count against limits. */
   orderId?: string | null;
   at?: Date;
 }
@@ -64,8 +78,13 @@ export interface PricedLine {
   discountAmount: number;
   taxAmount: number;
   taxLines: TaxLine[];
+  /** Effective tax rate for the line (basis points). */
+  taxRateBps: number;
   requiresShipping: boolean;
   taxable: boolean;
+  giftCard: boolean;
+  weightGrams: number;
+  collectionIds: string[];
   attributes: Record<string, string>;
   inventoryItemId: string | null;
   tracked: boolean;
@@ -76,11 +95,7 @@ export interface PricedLine {
   stockIssue: string | null;
 }
 
-export interface ShippingRateOption {
-  id: string;
-  title: string;
-  amount: number;
-}
+export type ShippingRateOption = ShippingOption;
 
 export interface Pricing {
   currency: string;
@@ -95,7 +110,16 @@ export interface Pricing {
   total: number;
   taxesIncluded: boolean;
   taxLines: TaxLine[];
-  discount: { code: string | null; applied: boolean; error: string | null; application: DiscountApplication | null; resolved: ResolvedDiscount | null };
+  /** The entered code's status (kept for the Phase 3 cart/checkout UI). */
+  discount: { code: string | null; applied: boolean; error: string | null; application: DiscountApplication | null };
+  /** Every discount applied, automatic ones included, with the code ids for usage records. */
+  discounts: (DiscountApplication & { codeId: string | null })[];
+  giftCards: AppliedGiftCard[];
+  giftCardErrors: string[];
+  giftCardTotal: number;
+  /** What the customer still pays with a payment method: total − gift cards. */
+  totalDue: number;
+  weightGrams: number;
   shippingRequired: boolean;
   shippingRates: ShippingRateOption[];
   shippingLine: ShippingLine | null;
@@ -105,108 +129,50 @@ export interface Pricing {
 
 export const MAX_LINE_QUANTITY = 999;
 
-/** Rounds half away from zero (integer minor units never become fractional). */
-export const roundHalf = (n: number) => Math.sign(n) * Math.round(Math.abs(n));
-
-/** Splits `total` across `weights` proportionally; remainders go to the largest fractions first. */
-export function allocate(total: number, weights: number[]): number[] {
-  const sum = weights.reduce((a, b) => a + b, 0);
-  if (total <= 0 || sum <= 0) return weights.map(() => 0);
-  const exact = weights.map((w) => (total * w) / sum);
-  const out = exact.map(Math.floor);
-  let rest = total - out.reduce((a, b) => a + b, 0);
-  const order = exact.map((e, i) => [e - Math.floor(e), i] as const).sort((a, b) => b[0] - a[0] || a[1] - b[1]);
-  for (const [, i] of order) {
-    if (rest <= 0) break;
-    out[i]! += 1;
-    rest -= 1;
-  }
-  return out;
-}
-
-interface TaxConfig {
-  mode: "india_gst" | "generic";
-  pricesIncludeTax: boolean;
-  defaultRateBps: number;
-  registeredState?: string | undefined;
-  label?: string | undefined;
-  taxShipping?: boolean | undefined;
-}
-
-function taxOn(base: number, rateBps: number, included: boolean): number {
-  if (base <= 0 || rateBps <= 0) return 0;
-  return roundHalf(included ? (base * rateBps) / (10_000 + rateBps) : (base * rateBps) / 10_000);
-}
-
-const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
-
-/** Names and splits one tax amount: GST → CGST+SGST within the registered state, IGST across states. */
-function taxLinesFor(amount: number, cfg: TaxConfig, address: MailingAddress | null | undefined): TaxLine[] {
-  const rate = cfg.defaultRateBps;
-  if (amount === 0 || rate === 0) return [];
-  if (cfg.mode === "india_gst") {
-    if (address && cfg.registeredState && address.country === "IN") {
-      if (norm(address.province) === norm(cfg.registeredState)) {
-        const cgst = Math.floor(amount / 2);
-        return [
-          { title: "CGST", rateBps: rate / 2, amount: cgst },
-          { title: "SGST", rateBps: rate / 2, amount: amount - cgst },
-        ];
-      }
-      return [{ title: "IGST", rateBps: rate, amount }];
-    }
-    return [{ title: "GST", rateBps: rate, amount }];
-  }
-  return [{ title: cfg.label?.trim() || "Tax", rateBps: rate, amount }];
-}
-
-function mergeTaxLines(lists: TaxLine[][]): TaxLine[] {
-  const map = new Map<string, TaxLine>();
-  for (const l of lists.flat()) {
-    const key = `${l.title}:${l.rateBps}`;
-    const prev = map.get(key);
-    map.set(key, prev ? { ...prev, amount: prev.amount + l.amount } : { ...l });
-  }
-  return [...map.values()];
-}
-
-/** Loads the variants and their stock in one round trip. */
+/** Loads the variants, their stock and collections in one round trip. */
 async function loadVariants(db: Executor, storeId: string, variantIds: string[]) {
-  const rows = variantIds.length === 0 ? [] : await db
-    .select({
-      variantId: productVariants.id,
-      productId: products.id,
-      handle: products.handle,
-      productTitle: products.title,
-      status: products.status,
-      featuredMediaId: products.featuredMediaId,
-      variantTitle: productVariants.title,
-      price: productVariants.price,
-      compareAtPrice: productVariants.compareAtPrice,
-      sku: productVariants.sku,
-      hsnCode: productVariants.hsnCode,
-      requiresShipping: productVariants.requiresShipping,
-      taxable: productVariants.taxable,
-      inventoryPolicy: productVariants.inventoryPolicy,
-      imageMediaId: productVariants.imageMediaId,
-      inventoryItemId: inventoryItems.id,
-      tracked: inventoryItems.tracked,
-      available: sql<number | null>`(select sum(${inventoryLevels.available})::int from ${inventoryLevels}
+  const rows =
+    variantIds.length === 0
+      ? []
+      : await db
+          .select({
+            variantId: productVariants.id,
+            productId: products.id,
+            handle: products.handle,
+            productTitle: products.title,
+            status: products.status,
+            giftCard: products.giftCard,
+            featuredMediaId: products.featuredMediaId,
+            variantTitle: productVariants.title,
+            price: productVariants.price,
+            compareAtPrice: productVariants.compareAtPrice,
+            sku: productVariants.sku,
+            hsnCode: productVariants.hsnCode,
+            weight: productVariants.weight,
+            weightUnit: productVariants.weightUnit,
+            requiresShipping: productVariants.requiresShipping,
+            taxable: productVariants.taxable,
+            inventoryPolicy: productVariants.inventoryPolicy,
+            imageMediaId: productVariants.imageMediaId,
+            inventoryItemId: inventoryItems.id,
+            tracked: inventoryItems.tracked,
+            available: sql<number | null>`(select sum(${inventoryLevels.available})::int from ${inventoryLevels}
         join ${locations} on ${locations.id} = ${inventoryLevels.locationId} and ${locations.active}
         where ${inventoryLevels.inventoryItemId} = ${inventoryItems.id})`,
-    })
-    .from(productVariants)
-    .innerJoin(products, eq(products.id, productVariants.productId))
-    .leftJoin(inventoryItems, eq(inventoryItems.variantId, productVariants.id))
-    .where(and(eq(productVariants.storeId, storeId), inArray(productVariants.id, variantIds)));
+            collectionIds: sql<string[]>`coalesce((select array_agg(cp.collection_id) from collection_products cp where cp.product_id = ${products.id}), '{}'::uuid[])`,
+          })
+          .from(productVariants)
+          .innerJoin(products, eq(products.id, productVariants.productId))
+          .leftJoin(inventoryItems, eq(inventoryItems.variantId, productVariants.id))
+          .where(and(eq(productVariants.storeId, storeId), inArray(productVariants.id, variantIds)));
   return new Map(rows.map((r) => [r.variantId, r]));
 }
 
-export async function priceLines(db: Executor, storeId: string, input: PricingInput): Promise<Pricing> {
+export async function priceLines(db: Executor, storeId: string, input: PricingInput, opts: { deps?: CoreDeps } = {}): Promise<Pricing> {
   const at = input.at ?? new Date();
   const store = await getStore(db, storeId);
   const currency = store.currency ?? "USD";
-  const [tax, shippingCfg] = await Promise.all([getSetting(db, storeId, "tax.config"), getSetting(db, storeId, "shipping.defaults")]);
+  const tax = await getSetting(db, storeId, "tax.config");
   const variants = await loadVariants(db, storeId, [...new Set(input.lines.map((l) => l.variantId))]);
 
   const lines: PricedLine[] = [];
@@ -243,8 +209,13 @@ export async function priceLines(db: Executor, storeId: string, input: PricingIn
       discountAmount: 0,
       taxAmount: 0,
       taxLines: [],
-      requiresShipping: v.requiresShipping,
-      taxable: v.taxable,
+      taxRateBps: 0,
+      // Gift cards are not shipped and not taxed when sold (tax applies when they are spent).
+      requiresShipping: v.giftCard ? false : v.requiresShipping,
+      taxable: v.giftCard ? false : v.taxable,
+      giftCard: v.giftCard,
+      weightGrams: toGrams(v.weight, v.weightUnit) * quantity,
+      collectionIds: v.collectionIds ?? [],
       attributes: l.attributes ?? {},
       inventoryItemId: v.inventoryItemId,
       tracked,
@@ -256,84 +227,106 @@ export async function priceLines(db: Executor, storeId: string, input: PricingIn
 
   const subtotal = lines.reduce((s, l) => s + l.subtotal, 0);
   const itemCount = lines.reduce((s, l) => s + l.quantity, 0);
-
-  // ── Discount ──
-  const discount: Pricing["discount"] = { code: input.discountCode?.trim() || null, applied: false, error: null, application: null, resolved: null };
-  let orderDiscount = 0;
-  let freeShipping = false;
-  if (input.manualDiscount && input.manualDiscount.value > 0) {
-    const m = input.manualDiscount;
-    orderDiscount = m.kind === "percentage" ? roundHalf((subtotal * Math.min(m.value, 10_000)) / 10_000) : Math.min(m.value, subtotal);
-    discount.applied = orderDiscount > 0;
-    discount.application = { code: null, title: m.reason?.trim() || "Discount", kind: "manual", value: m.value, amount: orderDiscount, discountId: null };
-  } else if (discount.code && lines.length > 0) {
-    const resolved = await resolveDiscountCode(db, storeId, discount.code, {
-      subtotal,
-      email: input.customer?.email ?? null,
-      customerId: input.customer?.id ?? null,
-      at,
-      excludeOrderId: input.orderId ?? null,
-    });
-    if (!resolved.ok) discount.error = resolved.error;
-    else {
-      const d = resolved.value.discount;
-      discount.resolved = resolved.value;
-      discount.code = resolved.value.code;
-      if (d.kind === "percentage") orderDiscount = roundHalf((subtotal * d.value) / 10_000);
-      else if (d.kind === "fixed_amount") orderDiscount = Math.min(d.value, subtotal);
-      else freeShipping = true;
-      discount.applied = true;
-      discount.application = { code: resolved.value.code, title: d.title, kind: d.kind, value: d.value, amount: orderDiscount, discountId: d.id };
-    }
-  }
-  orderDiscount = Math.min(orderDiscount, subtotal);
-  const shares = allocate(orderDiscount, lines.map((l) => l.subtotal));
-  lines.forEach((l, i) => (l.discountAmount = shares[i]!));
-  const discountedSubtotal = subtotal - orderDiscount;
-
-  // ── Shipping ──
   const shippingRequired = lines.some((l) => l.requiresShipping);
+  const weightGrams = lines.filter((l) => l.requiresShipping).reduce((s, l) => s + l.weightGrams, 0);
+  const engineLines: EngineLine[] = lines.map((l) => ({ productId: l.productId, collectionIds: l.collectionIds, unitPrice: l.unitPrice, quantity: l.quantity, giftCard: l.giftCard }));
+
+  // ── Shipping options (priced on the subtotal before order discounts; recomputed below) ──
   let shippingRates: ShippingRateOption[] = [];
   let shippingLine: ShippingLine | null = null;
-  if (input.customShipping !== undefined) {
-    if (input.customShipping) {
-      const amount = Math.max(0, Math.trunc(input.customShipping.amount));
-      shippingLine = { id: "custom", title: input.customShipping.title || "Shipping", amount, discount: 0 };
-      shippingRates = [{ id: "custom", title: shippingLine.title, amount }];
+  const pickShipping = async (discountedShippableSubtotal: number) => {
+    shippingRates = [];
+    shippingLine = null;
+    if (input.customShipping !== undefined) {
+      if (input.customShipping) {
+        const amount = Math.max(0, Math.trunc(input.customShipping.amount));
+        shippingLine = { id: "custom", title: input.customShipping.title || "Shipping", amount, discount: 0, kind: "custom" };
+        shippingRates = [{ id: "custom", title: shippingLine.title, amount, kind: "flat" }];
+      }
+      return;
     }
-  } else if (shippingRequired) {
+    if (!shippingRequired) return;
+    const quote = await quoteShipping(db, storeId, { address: input.shippingAddress, subtotal: discountedShippableSubtotal, weightGrams, currency, ...(opts.deps ? { deps: opts.deps } : {}) });
+    shippingRates = quote.options;
     const country = input.shippingAddress?.country?.toUpperCase();
-    const ships = shippingCfg.countries.length === 0 || !country || shippingCfg.countries.includes(country);
-    if (!ships) blockers.push(`We don't ship to ${country} yet`);
-    else {
-      const free = shippingCfg.freeOver !== null && discountedSubtotal >= shippingCfg.freeOver;
-      shippingRates = [{ id: "standard", title: shippingCfg.rateName || "Standard", amount: free ? 0 : shippingCfg.rateAmount }];
-    }
+    if (input.shippingAddress && (!quote.ships || shippingRates.length === 0)) blockers.push(`We don't ship to ${country === "IN" && input.shippingAddress.postalCode ? `PIN ${input.shippingAddress.postalCode}` : country} yet`);
     const chosen = shippingRates.find((r) => r.id === input.shippingRateId) ?? (shippingRates.length === 1 ? shippingRates[0] : undefined);
-    if (chosen && input.shippingAddress) shippingLine = { id: chosen.id, title: chosen.title, amount: chosen.amount, discount: 0 };
+    if (chosen && input.shippingAddress) {
+      shippingLine = { id: chosen.id, title: chosen.title, amount: chosen.amount, discount: 0, kind: chosen.kind, provider: chosen.provider ?? null, carrierRateId: chosen.carrierRateId ?? null };
+    }
+  };
+
+  // ── Discounts ──
+  const discount: Pricing["discount"] = { code: null, applied: false, error: null, application: null };
+  const applications: Pricing["discounts"] = [];
+  const enteredCodes = [...(input.discountCodes ?? []), ...(input.discountCode?.trim() ? [input.discountCode.trim()] : [])];
+  discount.code = enteredCodes[0] ?? null;
+
+  if (input.manualDiscount && input.manualDiscount.value > 0) {
+    await pickShipping(subtotal);
+    const m = input.manualDiscount;
+    const amount = Math.min(m.kind === "percentage" ? roundHalf((subtotal * Math.min(m.value, 10_000)) / 10_000) : m.value, subtotal);
+    allocate(amount, lines.map((l) => l.subtotal)).forEach((a, i) => (lines[i]!.discountAmount = a));
+    discount.applied = amount > 0;
+    discount.application = { code: null, title: m.reason?.trim() || "Discount", kind: "manual", value: m.value, amount, discountId: null };
+    applications.push({ ...discount.application, codeId: null });
+  } else {
+    const { candidates, errors } = lines.length
+      ? await loadDiscountCandidates(db, storeId, enteredCodes, { email: input.customer?.email ?? null, customerId: input.customer?.id ?? null, at, excludeOrderId: input.orderId ?? null })
+      : { candidates: [], errors: [] };
+    // Shipping is quoted on the subtotal after product/order discounts (free-over thresholds);
+    // a first pass without shipping gives that subtotal.
+    const pass1 = applyDiscounts({ lines: engineLines, discounts: candidates, shippingAmount: null });
+    const shippable = lines.reduce((s, l, i) => s + (l.requiresShipping ? l.subtotal - pass1.lineDiscounts[i]! : 0), 0);
+    await pickShipping(shippable);
+    const sl = shippingLine as ShippingLine | null;
+    const result = applyDiscounts({ lines: engineLines, discounts: candidates, shippingAmount: sl ? sl.amount : null });
+    result.lineDiscounts.forEach((a, i) => (lines[i]!.discountAmount = a));
+    if (sl) sl.discount = result.shippingDiscount;
+    for (const a of result.applications) {
+      const c = candidates.find((x) => x.id === a.discount.id)!;
+      applications.push({ code: c.code, title: c.title, kind: c.kind, value: c.value, amount: a.amount, discountId: c.id, codeId: c.codeId });
+    }
+    const codeError = [...errors, ...result.rejected][0];
+    const codeApp = applications.find((a) => a.code && enteredCodes.some((e) => e.toLowerCase() === a.code!.toLowerCase()));
+    if (codeApp) {
+      discount.applied = true;
+      discount.code = codeApp.code;
+      discount.application = codeApp;
+    } else if (codeError) discount.error = codeError.reason;
+    // An automatic discount still counts as "a discount applied" for the totals view.
+    if (!discount.application && applications[0]) discount.application = applications[0];
   }
-  if (shippingLine && freeShipping) {
-    shippingLine.discount = shippingLine.amount;
-    if (discount.application) discount.application.amount = shippingLine.amount;
-  }
-  const shippingTotal = shippingLine ? shippingLine.amount - shippingLine.discount : 0;
+
+  const finalShipping = shippingLine as ShippingLine | null;
+  const orderDiscount = lines.reduce((s, l) => s + l.discountAmount, 0);
+  const discountedSubtotal = subtotal - orderDiscount;
+  const shippingTotal = finalShipping ? finalShipping.amount - finalShipping.discount : 0;
 
   // ── Tax ──
   const included = tax.pricesIncludeTax;
+  const taxCtx = await loadTaxContext(db, storeId, tax, input.shippingAddress);
   for (const l of lines) {
     if (!l.taxable) continue;
-    l.taxAmount = taxOn(l.subtotal - l.discountAmount, tax.defaultRateBps, included);
-    l.taxLines = taxLinesFor(l.taxAmount, tax, input.shippingAddress);
+    l.taxRateBps = rateForLine(taxCtx, l.collectionIds);
+    l.taxAmount = taxOn(l.subtotal - l.discountAmount, l.taxRateBps, included);
+    l.taxLines = splitTax(l.taxAmount, l.taxRateBps, tax, input.shippingAddress, taxCtx.baseName);
   }
-  const shippingTax = tax.taxShipping ? taxOn(shippingTotal, tax.defaultRateBps, included) : 0;
-  const taxLines = mergeTaxLines([...lines.map((l) => l.taxLines), taxLinesFor(shippingTax, tax, input.shippingAddress)]);
+  const shippingTax = tax.taxShipping ? taxOn(shippingTotal, taxCtx.baseRateBps, included) : 0;
+  const taxLines = mergeTaxLines([...lines.map((l) => l.taxLines), splitTax(shippingTax, taxCtx.baseRateBps, tax, input.shippingAddress, taxCtx.baseName)]);
   const taxTotal = taxLines.reduce((s, t) => s + t.amount, 0);
 
-  const discountTotal = orderDiscount + (shippingLine?.discount ?? 0);
+  const discountTotal = orderDiscount + (finalShipping?.discount ?? 0);
   const total = discountedSubtotal + shippingTotal + (included ? 0 : taxTotal);
 
+  // ── Gift cards ──
+  const gc = input.giftCardCodes?.length ? await resolveGiftCards(db, storeId, input.giftCardCodes, currency, at) : { cards: [], errors: [] };
+  const giftCardsApplied = applyGiftCardBalances(gc.cards, total);
+  const giftCardTotal = giftCardsApplied.reduce((s, g) => s + g.amount, 0);
+
   if (lines.length === 0) blockers.push("Your cart is empty");
-  if (discount.error && discount.code) blockers.push(discount.error);
+  if (discount.error && enteredCodes.length && !discount.applied) blockers.push(discount.error);
+  for (const e of gc.errors) blockers.push(e.reason);
 
   return {
     currency,
@@ -348,9 +341,15 @@ export async function priceLines(db: Executor, storeId: string, input: PricingIn
     taxesIncluded: included,
     taxLines,
     discount,
+    discounts: applications,
+    giftCards: giftCardsApplied,
+    giftCardErrors: gc.errors.map((e) => e.reason),
+    giftCardTotal,
+    totalDue: total - giftCardTotal,
+    weightGrams,
     shippingRequired,
     shippingRates,
-    shippingLine,
+    shippingLine: finalShipping,
     blockers,
   };
 }

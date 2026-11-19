@@ -31,7 +31,6 @@ import { linesWithImages } from "./carts.js";
 import {
   addOrderEvent,
   applyPaymentResult,
-  applyProviderRefund,
   lockOrder,
   orderStatusToken,
   placeOrder,
@@ -41,6 +40,8 @@ import {
   writeOrderLines,
   type OrderRow,
 } from "./orders.js";
+import { applyProviderRefund } from "./refunds.js";
+import { redeemGiftCards } from "./gift-cards.js";
 import { priceLines, type Pricing } from "./pricing.js";
 
 type CheckoutRow = typeof checkouts.$inferSelect;
@@ -94,6 +95,9 @@ export const checkoutUpdateInput = z.object({
   shippingRateId: z.string().max(100).nullish(),
   paymentProvider: z.string().max(60).nullish(),
   discountCode: z.string().trim().max(40).nullish(),
+  giftCardCodes: z.array(z.string().trim().min(8).max(30)).max(5).optional(),
+  /** Optional buyer GSTIN / VAT id printed on the invoice. */
+  buyerTaxId: z.string().trim().max(20).nullish(),
   note: z.string().max(2000).nullish(),
 });
 export type CheckoutUpdate = z.input<typeof checkoutUpdateInput>;
@@ -108,6 +112,7 @@ export async function updateCheckout(deps: CoreDeps, storeId: string, checkout: 
   if (d.shippingAddress !== undefined) set.shippingAddress = d.shippingAddress ?? null;
   if (d.billingAddress !== undefined) set.billingAddress = d.billingAddress ?? null;
   if (d.shippingRateId !== undefined) set.shippingRateId = d.shippingRateId ?? null;
+  if (d.buyerTaxId !== undefined) set.buyerTaxId = d.buyerTaxId?.toUpperCase() || null;
   if (d.paymentProvider !== undefined) {
     if (d.paymentProvider && !(await paymentMethods(deps, storeId)).some((m) => m.id === d.paymentProvider)) throw new AppError("validation_failed", "That payment method is not available");
     set.paymentProvider = d.paymentProvider ?? null;
@@ -115,11 +120,12 @@ export async function updateCheckout(deps: CoreDeps, storeId: string, checkout: 
   // Editing the email restarts the abandoned-checkout clock and allows a new reminder.
   if (d.email !== undefined && d.email?.toLowerCase() !== checkout.email) set.abandonedNotifiedAt = null;
   await deps.db.update(checkouts).set(set).where(eq(checkouts.id, checkout.id));
-  if (d.discountCode !== undefined || d.note !== undefined) {
+  if (d.discountCode !== undefined || d.note !== undefined || d.giftCardCodes !== undefined) {
     await deps.db
       .update(carts)
       .set({
         ...(d.discountCode !== undefined ? { discountCode: d.discountCode?.trim() || null } : {}),
+        ...(d.giftCardCodes !== undefined ? { giftCardCodes: [...new Set(d.giftCardCodes.map((c) => c.toUpperCase()))] } : {}),
         ...(d.note !== undefined ? { note: d.note?.trim() || null } : {}),
         updatedAt: now(deps),
       })
@@ -168,10 +174,11 @@ async function priceCheckout(deps: CoreDeps, storeId: string, checkout: Checkout
     shippingAddress: checkout.shippingAddress,
     shippingRateId: checkout.shippingRateId,
     discountCode: cart.discountCode,
-    customer: { id: checkout.customerId, email: checkout.email },
+    giftCardCodes: cart.giftCardCodes,
+    customer: { id: checkout.customerId ?? cart.customerId, email: checkout.email },
     orderId: checkout.orderId,
     at: now(deps),
-  });
+  }, { deps });
 }
 
 /** Everything the one-page checkout renders, priced server-side. */
@@ -182,7 +189,7 @@ export async function checkoutView(deps: CoreDeps, storeId: string, checkout: Ch
   if (cfg.requirePhone && !checkout.phone) missing.push("phone");
   if (pricing.shippingRequired && !checkout.shippingAddress) missing.push("shipping_address");
   if (pricing.shippingRequired && checkout.shippingAddress && !pricing.shippingLine) missing.push("shipping_rate");
-  if (!checkout.paymentProvider || !methods.some((m) => m.id === checkout.paymentProvider)) missing.push("payment_method");
+  if (pricing.totalDue > 0 && (!checkout.paymentProvider || !methods.some((m) => m.id === checkout.paymentProvider))) missing.push("payment_method");
   const completedOrder = checkout.status === "completed" && checkout.orderId ? orderStatusToken(deps, checkout.orderId) : null;
   return {
     id: checkout.id,
@@ -207,6 +214,12 @@ export async function checkoutView(deps: CoreDeps, storeId: string, checkout: Ch
     taxesIncluded: pricing.taxesIncluded,
     taxLines: pricing.taxLines,
     discount: { code: pricing.discount.code, applied: pricing.discount.applied, error: pricing.discount.error, amount: pricing.discount.application?.amount ?? 0 },
+    discounts: pricing.discounts.map((d) => ({ code: d.code, title: d.title, amount: d.amount })),
+    giftCards: pricing.giftCards.map((g) => ({ lastCharacters: g.lastCharacters, amount: g.amount })),
+    giftCardErrors: pricing.giftCardErrors,
+    giftCardTotal: pricing.giftCardTotal,
+    totalDue: pricing.totalDue,
+    buyerTaxId: checkout.buyerTaxId,
     shippingRequired: pricing.shippingRequired,
     shippingRates: pricing.shippingRates,
     shippingLine: pricing.shippingLine,
@@ -242,14 +255,16 @@ export async function createPaymentSession(deps: CoreDeps, storeId: string, chec
     const { checkout, cart } = await loadCheckout(tx, storeId, checkoutId, cartToken);
     await tx.select({ id: checkouts.id }).from(checkouts).where(eq(checkouts.id, checkout.id)).for("update");
     if (checkout.status === "completed") throw new AppError("conflict", "This checkout is already complete");
-    const method = methods.find((m) => m.id === checkout.paymentProvider);
+    const pricing = await priceCheckout(deps, storeId, checkout, cart, tx);
+    // Fully covered by gift cards: no payment provider involved.
+    const method: PaymentMethod | undefined = pricing.totalDue <= 0 && pricing.giftCardTotal > 0 ? { id: "gift_card", displayName: "Gift card", flow: "offline", mode: "live" } : methods.find((m) => m.id === checkout.paymentProvider);
     if (!method) throw new AppError("validation_failed", "Choose a payment method");
     if (!checkout.email) throw new AppError("validation_failed", "Enter your email");
     if (cfg.requirePhone && !checkout.phone) throw new AppError("validation_failed", "Enter your phone number");
-    const pricing = await priceCheckout(deps, storeId, checkout, cart, tx);
     if (pricing.blockers.length) throw new AppError("conflict", pricing.blockers[0]!, { blockers: pricing.blockers });
     if (pricing.shippingRequired && (!checkout.shippingAddress || !pricing.shippingLine)) throw new AppError("validation_failed", "Choose a shipping address and method");
     if (pricing.total <= 0) throw new AppError("validation_failed", "Free orders are not supported yet");
+    const buyerTaxId = checkout.buyerTaxId;
 
     const at = now(deps);
     const fields = {
@@ -264,6 +279,7 @@ export async function createPaymentSession(deps: CoreDeps, storeId: string, chec
       marketingConsent: checkout.marketingConsent,
       paymentProvider: method.id,
       paymentMode: method.mode,
+      buyerTaxId,
       reservationExpiresAt: new Date(at.getTime() + cfg.reservationMinutes * 60_000),
     };
     let order: OrderRow | undefined;
@@ -284,10 +300,11 @@ export async function createPaymentSession(deps: CoreDeps, storeId: string, chec
     }
     await writeOrderLines(tx, storeId, order.id, pricing);
     await reserveInventory(tx, storeId, order);
+    await redeemGiftCards(tx, storeId, order.id, pricing.giftCards, { type: "customer", id: order.customerId });
     await tx.update(checkouts).set({ totals: { subtotal: pricing.subtotal, discountTotal: pricing.discountTotal, shippingTotal: pricing.shippingTotal, taxTotal: pricing.taxTotal, total: pricing.total, taxesIncluded: pricing.taxesIncluded } }).where(eq(checkouts.id, checkout.id));
     if (method.flow === "offline") {
-      await placeOrder(tx, deps, order, { paid: false, actor: { type: "customer", id: order.customerId } });
-      await tx.insert(paymentSessions).values({ storeId, orderId: order.id, provider: method.id, mode: method.mode, providerOrderId: null, amount: order.total, currency: order.currency });
+      await placeOrder(tx, deps, order, { paid: method.id === "gift_card", actor: { type: "customer", id: order.customerId } });
+      await tx.insert(paymentSessions).values({ storeId, orderId: order.id, provider: method.id, mode: method.mode, providerOrderId: null, amount: order.total - order.giftCardTotal, currency: order.currency });
     } else {
       await enqueueEvent(tx, { storeId, type: "order.reservation_created", payload: { orderId: order.id, dueAt: fields.reservationExpiresAt.toISOString() } });
     }
@@ -295,6 +312,9 @@ export async function createPaymentSession(deps: CoreDeps, storeId: string, chec
   });
 
   const { order, method } = prepared;
+  if (method.id === "gift_card") {
+    return { orderId: order.id, flow: "offline", provider: "gift_card", clientPayload: {}, redirectUrl: null, orderStatusToken: orderStatusToken(deps, order.id) };
+  }
   const provider = await loadProvider(deps, { storeId, kind: "payment", provider: method.id, mode: method.mode });
   if (!provider) throw new AppError("conflict", "That payment method is not available");
   const returnUrl = `${deps.runtime.publicUrl}/checkout/return?checkout=${checkoutId}&provider=${encodeURIComponent(method.id)}`;
@@ -302,7 +322,7 @@ export async function createPaymentSession(deps: CoreDeps, storeId: string, chec
   try {
     session = await provider.createSession({
       order: { id: order.id, ...(order.name ? { number: order.name } : {}) },
-      amount: order.total,
+      amount: order.total - order.giftCardTotal,
       currency: order.currency,
       customer: { ...(prepared.customerName ? { name: prepared.customerName } : {}), ...(order.email ? { email: order.email } : {}), ...(order.phone ? { phone: order.phone } : {}) },
       returnUrl,
@@ -311,7 +331,7 @@ export async function createPaymentSession(deps: CoreDeps, storeId: string, chec
     throw new AppError("provider_error", err instanceof ProviderError ? err.message : "The payment provider could not be reached. Try again.");
   }
   if (method.flow !== "offline") {
-    await deps.db.insert(paymentSessions).values({ storeId, orderId: order.id, provider: method.id, mode: method.mode, providerOrderId: session.providerOrderId, amount: order.total, currency: order.currency });
+    await deps.db.insert(paymentSessions).values({ storeId, orderId: order.id, provider: method.id, mode: method.mode, providerOrderId: session.providerOrderId, amount: order.total - order.giftCardTotal, currency: order.currency });
   }
   return {
     orderId: order.id,
@@ -387,6 +407,15 @@ async function findOrderForEvent(tx: Executor, storeId: string, provider: string
       .limit(1);
     if (t) return lockOrder(tx, storeId, t.orderId);
   }
+  if (event.refund?.id) {
+    // A refund we started (pending) is found by its provider refund id.
+    const [t] = await tx
+      .select({ orderId: transactions.orderId })
+      .from(transactions)
+      .where(and(eq(transactions.storeId, storeId), eq(transactions.provider, provider), eq(transactions.kind, "refund"), eq(transactions.providerReference, event.refund.id)))
+      .limit(1);
+    if (t) return lockOrder(tx, storeId, t.orderId);
+  }
   return null;
 }
 
@@ -437,8 +466,9 @@ export async function handlePaymentWebhook(
     if (!order) result = "no_order";
     else if (verified.type === "payment.captured" || verified.type === "payment.authorized" || verified.type === "payment.failed") {
       if (verified.payment) result = (await applyPaymentResult(tx, deps, order, verified.payment, { provider: providerId, mode, via: "webhook", eventId: verified.id })).changed ? "applied" : "ignored";
-    } else if (verified.type === "refund.processed" && verified.refund) {
-      result = (await applyProviderRefund(tx, deps, order, { id: verified.refund.id, amount: verified.refund.amount, currency: verified.payment?.currency ?? order.currency }, providerId, mode)).changed ? "applied" : "ignored";
+    } else if ((verified.type === "refund.processed" || verified.type === "refund.failed") && verified.refund) {
+      const refund = { id: verified.refund.id, amount: verified.refund.amount, currency: verified.payment?.currency ?? order.currency };
+      result = (await applyProviderRefund(tx, deps, order, refund, providerId, mode, verified.type === "refund.failed" ? "failure" : "success")).changed ? "applied" : "ignored";
     }
     await tx.update(paymentWebhookEvents).set({ orderId: order?.id ?? null, outcome: result }).where(eq(paymentWebhookEvents.id, claimed.id));
     return result;

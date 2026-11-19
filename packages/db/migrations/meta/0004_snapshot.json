@@ -1,5 +1,5 @@
 {
-  "id": "aabc1217-1682-46bf-8174-779424c7ef39",
+  "id": "e37ad08c-a954-465a-a23e-7f6d95092b95",
   "prevId": "338d7030-fd39-466d-ac26-716d972acc35",
   "version": "7",
   "dialect": "postgresql",
@@ -6028,6 +6028,13 @@
         },
         "returned_quantity": {
           "name": "returned_quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "kept_quantity": {
+          "name": "kept_quantity",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,

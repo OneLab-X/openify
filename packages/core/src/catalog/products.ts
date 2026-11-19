@@ -498,6 +498,7 @@ export function fromRaw(r: Record<string, unknown>): ListRow {
     handle: r.handle as string,
     descriptionHtml: r.description_html as string,
     status: r.status as ListRow["status"],
+    giftCard: (r.gift_card as boolean | undefined) ?? false,
     vendor: r.vendor as string | null,
     productType: r.product_type as string | null,
     seoTitle: r.seo_title as string | null,

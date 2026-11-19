@@ -128,6 +128,17 @@ export async function routeOutboxEvent(deps: CoreDeps, event: OutboxEvent): Prom
       return event.payload.notify === false ? [] : orderEmails(deps, event, "refund", `:${String(event.payload.refundId)}`);
     case "order.shipping_updated":
       return orderEmails(deps, event, "shipping_update", `:${String(event.payload.eventId)}`);
+    case "order.fulfillment_updated":
+      return event.payload.notify === false ? [] : orderEmails(deps, event, "delivery_update", `:${String(event.payload.fulfillmentId)}:${String(event.payload.status)}`);
+    case "return.updated":
+      return event.payload.notify === false ? [] : orderEmails(deps, event, "return_update", `:${String(event.payload.returnId)}:${String(event.payload.status)}`);
+    case "gift_card.issued": {
+      const to = typeof event.payload.email === "string" ? event.payload.email : "";
+      if (!to) return [];
+      return [email(event, "gift_card_issued", to, { giftCardId: event.payload.giftCardId, code: event.payload.code }, `gift_card:${String(event.payload.giftCardId)}`)];
+    }
+    case "staff.invited":
+      return [email(event, "staff_invite", String(event.payload.email), { acceptUrl: event.payload.acceptUrl }, `staff_invite:${String(event.payload.inviteId)}`)];
     case "order.reservation_created": {
       const due = Date.parse(String(event.payload.dueAt));
       const delay = Number.isFinite(due) ? Math.max(0, due - Date.now()) : 0;

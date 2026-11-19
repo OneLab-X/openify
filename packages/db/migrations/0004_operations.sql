@@ -235,6 +235,7 @@ ALTER TABLE "discounts" ADD COLUMN "usage_limit_per_customer" integer;--> statem
 ALTER TABLE "discounts" ADD COLUMN "combines_with" jsonb DEFAULT '{"product":false,"order":false,"shipping":false}'::jsonb NOT NULL;--> statement-breakpoint
 ALTER TABLE "order_lines" ADD COLUMN "fulfilled_quantity" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
 ALTER TABLE "order_lines" ADD COLUMN "returned_quantity" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "order_lines" ADD COLUMN "kept_quantity" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
 ALTER TABLE "order_lines" ADD COLUMN "gift_card" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 ALTER TABLE "order_sequences" ADD COLUMN "next_invoice" integer DEFAULT 1 NOT NULL;--> statement-breakpoint
 ALTER TABLE "orders" ADD COLUMN "gift_card_total" bigint DEFAULT 0 NOT NULL;--> statement-breakpoint

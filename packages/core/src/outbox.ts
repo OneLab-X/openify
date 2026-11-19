@@ -23,6 +23,10 @@ export const OUTBOX_EVENT_TYPES = [
   "order.cancelled",
   "order.refunded",
   "order.shipping_updated",
+  "order.fulfillment_updated",
+  "return.updated",
+  "gift_card.issued",
+  "staff.invited",
 ] as const;
 export type OutboxEventType = (typeof OUTBOX_EVENT_TYPES)[number];
 

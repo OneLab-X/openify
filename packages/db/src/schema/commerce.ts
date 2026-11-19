@@ -53,6 +53,10 @@ export interface ShippingLine {
   title: string;
   amount: number;
   discount: number;
+  /** Phase 4: rate kind, carrier provider and the carrier's quoted rate id. */
+  kind?: string;
+  provider?: string | null;
+  carrierRateId?: string | null;
 }
 
 export interface DiscountApplication {
@@ -62,6 +66,7 @@ export interface DiscountApplication {
   value: number;
   amount: number;
   discountId: string | null;
+  codeId?: string | null;
 }
 
 export interface OrderTotals {
@@ -281,6 +286,8 @@ export const orderLines = pgTable(
     refundedQuantity: integer().notNull().default(0),
     fulfilledQuantity: integer().notNull().default(0),
     returnedQuantity: integer().notNull().default(0),
+    /** Shipped units refunded without coming back (customer kept them); not returnable. */
+    keptQuantity: integer().notNull().default(0),
     /** Gift card product line: cards are issued when the order is paid. */
     giftCard: boolean().notNull().default(false),
     position: integer().notNull().default(0),

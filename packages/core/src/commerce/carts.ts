@@ -28,6 +28,8 @@ export const updateCartInput = z.object({
   attributes: attributesSchema.optional(),
   /** Empty string or null removes the code. */
   discountCode: z.string().trim().max(40).nullish(),
+  /** Replaces the entered gift card codes (Phase 4). */
+  giftCardCodes: z.array(z.string().trim().min(8).max(30)).max(5).optional(),
 });
 
 type CartRow = typeof carts.$inferSelect;
@@ -122,6 +124,7 @@ export async function updateCart(deps: CoreDeps, cart: CartRow, input: z.input<t
   if (data.note !== undefined) set.note = data.note?.trim() || null;
   if (data.attributes !== undefined) set.attributes = data.attributes;
   if (data.discountCode !== undefined) set.discountCode = data.discountCode?.trim() || null;
+  if (data.giftCardCodes !== undefined) set.giftCardCodes = [...new Set(data.giftCardCodes.map((c) => c.toUpperCase()))];
   await deps.db.update(carts).set(set).where(eq(carts.id, cart.id));
 }
 
@@ -175,6 +178,7 @@ export async function cartView(deps: CoreDeps, storeId: string, cart: CartRow, c
   const pricing = await priceLines(deps.db, storeId, {
     lines: rows.map((r) => ({ variantId: r.variantId, quantity: r.quantity, attributes: r.attributes, ref: r.id })),
     discountCode: cart.discountCode,
+    giftCardCodes: cart.giftCardCodes,
     customer: customer ?? { id: cart.customerId },
     at: now(deps),
   });
@@ -192,6 +196,11 @@ export async function cartView(deps: CoreDeps, storeId: string, cart: CartRow, c
     total: pricing.total,
     taxesIncluded: pricing.taxesIncluded,
     discount: { code: pricing.discount.code, applied: pricing.discount.applied, error: pricing.discount.error, amount: pricing.discount.application?.amount ?? 0 },
+    discounts: pricing.discounts.map((d) => ({ code: d.code, title: d.title, amount: d.amount })),
+    giftCards: pricing.giftCards.map((g) => ({ lastCharacters: g.lastCharacters, amount: g.amount })),
+    giftCardErrors: pricing.giftCardErrors,
+    giftCardTotal: pricing.giftCardTotal,
+    totalDue: pricing.totalDue,
     updatedAt: cart.updatedAt.toISOString(),
   };
 }
@@ -211,6 +220,11 @@ export const emptyCartView = (currency: string): CartView => ({
   total: 0,
   taxesIncluded: false,
   discount: { code: null, applied: false, error: null, amount: 0 },
+  discounts: [],
+  giftCards: [],
+  giftCardErrors: [],
+  giftCardTotal: 0,
+  totalDue: 0,
   updatedAt: new Date(0).toISOString(),
 });
 
