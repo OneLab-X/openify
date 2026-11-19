@@ -9,6 +9,8 @@ export async function proxy(request: NextRequest) {
   const hasSession = request.cookies.has("sk_session");
   const onSetup = pathname === "/setup" || pathname.startsWith("/setup/");
   const onLogin = pathname === "/login";
+  // Invitation links are opened by people who have no account yet.
+  if (pathname.startsWith("/invite/")) return NextResponse.next();
 
   if (hasSession && !onSetup) return NextResponse.next();
 
