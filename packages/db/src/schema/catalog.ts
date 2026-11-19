@@ -56,6 +56,8 @@ export const products = pgTable(
     available: boolean().notNull().default(false),
     totalInventory: integer().notNull().default(0),
     featuredMediaId: uuid().references(() => media.id, { onDelete: "set null" }),
+    /** Gift card product (Phase 4): each unit sold issues a gift card worth the variant price. */
+    giftCard: boolean().notNull().default(false),
     /** Weighted: title A, vendor/type/tags B, SKUs/barcodes B, description C. Maintained by core. */
     searchVector: tsvector(),
     publishedAt: timestamp({ withTimezone: true }),

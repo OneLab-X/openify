@@ -29,6 +29,8 @@ export const customers = pgTable(
     marketingConsent: boolean().notNull().default(false),
     marketingConsentAt: timestamp({ withTimezone: true }),
     note: text(),
+    /** Optional buyer tax id (GSTIN in India), printed on invoices. */
+    taxId: text(),
     currency: char({ length: 3 }),
     ordersCount: integer().notNull().default(0),
     totalSpent: bigint({ mode: "number" }).notNull().default(0),

@@ -58,7 +58,7 @@ export interface ShippingLine {
 export interface DiscountApplication {
   code: string | null;
   title: string;
-  kind: "percentage" | "fixed_amount" | "free_shipping" | "manual";
+  kind: "percentage" | "fixed_amount" | "free_shipping" | "buy_x_get_y" | "manual";
   value: number;
   amount: number;
   discountId: string | null;
@@ -86,6 +86,8 @@ export const carts = pgTable(
     note: text(),
     attributes: jsonb().$type<Record<string, string>>().notNull().default({}),
     discountCode: citext(),
+    /** Gift card codes the shopper entered (Phase 4); balances are checked at pricing time. */
+    giftCardCodes: text().array().notNull().default(sql`'{}'::text[]`),
     /** Set when the cart becomes an order, or when it was merged into another cart at login. */
     completedAt: timestamp({ withTimezone: true }),
     mergedIntoId: uuid(),
@@ -143,6 +145,8 @@ export const checkouts = pgTable(
     billingAddress: jsonb().$type<MailingAddress>(),
     shippingRateId: text(),
     paymentProvider: text(),
+    /** Optional buyer GSTIN / VAT id for the invoice. */
+    buyerTaxId: text(),
     /** Last computed totals, for the abandoned-checkout email and admin. */
     totals: jsonb().$type<OrderTotals>(),
     orderId: uuid(),
@@ -200,6 +204,9 @@ export const orders = pgTable(
     taxesIncluded: boolean().notNull().default(false),
     amountPaid: money().notNull().default(0),
     amountRefunded: money().notNull().default(0),
+    /** Part of `total` paid with gift cards (Phase 4); included in amountPaid once redeemed. */
+    giftCardTotal: money().notNull().default(0),
+    buyerTaxId: text(),
     taxLines: jsonb().$type<TaxLine[]>().notNull().default([]),
     discountApplications: jsonb().$type<DiscountApplication[]>().notNull().default([]),
     shippingLine: jsonb().$type<ShippingLine | null>(),
@@ -240,6 +247,7 @@ export const orderSequences = pgTable("order_sequences", {
     .references(() => stores.id, { onDelete: "cascade" }),
   nextOrder: integer().notNull().default(1001),
   nextDraft: integer().notNull().default(1),
+  nextInvoice: integer().notNull().default(1),
 });
 
 export const orderLines = pgTable(
@@ -271,6 +279,10 @@ export const orderLines = pgTable(
     attributes: jsonb().$type<Record<string, string>>().notNull().default({}),
     restockedQuantity: integer().notNull().default(0),
     refundedQuantity: integer().notNull().default(0),
+    fulfilledQuantity: integer().notNull().default(0),
+    returnedQuantity: integer().notNull().default(0),
+    /** Gift card product line: cards are issued when the order is paid. */
+    giftCard: boolean().notNull().default(false),
     position: integer().notNull().default(0),
     createdAt: createdAt(),
   },
@@ -372,6 +384,8 @@ export const paymentWebhookEvents = pgTable(
   (t) => [uniqueIndex("payment_webhook_events_uq").on(t.storeId, t.provider, t.eventId)],
 );
 
+export const refundStatus = pgEnum("refund_status", ["pending", "success", "failure"]);
+
 export const refunds = pgTable(
   "refunds",
   {
@@ -380,7 +394,13 @@ export const refunds = pgTable(
     orderId: uuid()
       .notNull()
       .references(() => orders.id, { onDelete: "cascade" }),
+    /** Total refunded to the customer (lines + shipping + adjustment). */
     amount: money().notNull(),
+    /** Part of `amount` that refunds shipping. */
+    shippingAmount: money().notNull().default(0),
+    /** Pending until the provider confirms (synchronously or by webhook); amounts count on success. */
+    status: refundStatus().notNull().default("success"),
+    returnId: uuid(),
     currency: char({ length: 3 }).notNull(),
     reason: text(),
     note: text(),
@@ -445,7 +465,25 @@ export const draftOrders = pgTable(
 );
 
 // ── Discounts (basic codes; Phase 4 extends) ─────────────────────────────────
-export const discountKind = pgEnum("discount_kind", ["percentage", "fixed_amount", "free_shipping"]);
+export const discountKind = pgEnum("discount_kind", ["percentage", "fixed_amount", "free_shipping", "buy_x_get_y"]);
+export const discountMethod = pgEnum("discount_method", ["code", "automatic"]);
+export const discountTarget = pgEnum("discount_target", ["all", "collections", "products"]);
+export const discountEligibility = pgEnum("discount_eligibility", ["all", "customers", "tags"]);
+
+/** Which other discount classes a discount may combine with (Shopify's product/order/shipping classes). */
+export interface DiscountCombines {
+  product: boolean;
+  order: boolean;
+  shipping: boolean;
+}
+
+/** Buy X get Y: the "customer buys" requirement and the "customer gets" reward. */
+export interface BuyXGetY {
+  buy: { quantity: number; target: "all" | "collections" | "products"; productIds: string[]; collectionIds: string[] };
+  get: { quantity: number; target: "all" | "collections" | "products"; productIds: string[]; collectionIds: string[]; /** 10000 = free. */ percentOff: number };
+  /** Max times the reward applies per order (null = unlimited). */
+  usesPerOrder: number | null;
+}
 export const discountStatus = pgEnum("discount_status", ["active", "disabled"]);
 
 export const discounts = pgTable(
@@ -454,10 +492,25 @@ export const discounts = pgTable(
     id: pk(),
     storeId: storeRef(),
     title: text().notNull(),
+    method: discountMethod().notNull().default("code"),
     kind: discountKind().notNull(),
     /** Basis points for percentage, minor units for fixed_amount, unused for free_shipping. */
     value: integer().notNull().default(0),
+    target: discountTarget().notNull().default("all"),
+    productIds: uuid().array().notNull().default(sql`'{}'::uuid[]`),
+    collectionIds: uuid().array().notNull().default(sql`'{}'::uuid[]`),
+    /** fixed_amount on products: true = the amount off each eligible item, false = once across them. */
+    perItem: boolean().notNull().default(false),
+    bxgy: jsonb().$type<BuyXGetY | null>(),
     minSubtotal: money(),
+    minQuantity: integer(),
+    /** free_shipping: only when the shipping rate is at most this (null = any). */
+    maxShippingAmount: money(),
+    eligibility: discountEligibility().notNull().default("all"),
+    customerIds: uuid().array().notNull().default(sql`'{}'::uuid[]`),
+    customerTags: text().array().notNull().default(sql`'{}'::text[]`),
+    usageLimitPerCustomer: integer(),
+    combinesWith: jsonb().$type<DiscountCombines>().notNull().default({ product: false, order: false, shipping: false }),
     startsAt: timestamp({ withTimezone: true }),
     endsAt: timestamp({ withTimezone: true }),
     usageLimit: integer(),
@@ -467,7 +520,7 @@ export const discounts = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("discounts_store_idx").on(t.storeId, t.createdAt.desc())],
+  (t) => [index("discounts_store_idx").on(t.storeId, t.createdAt.desc()), index("discounts_automatic_idx").on(t.storeId).where(sql`${t.method} = 'automatic' and ${t.status} = 'active'`)],
 );
 
 export const discountCodes = pgTable(
