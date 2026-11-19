@@ -3,7 +3,7 @@ import { Readable } from "node:stream";
 import { text } from "node:stream/consumers";
 import { describe, expect, it } from "vitest";
 import { localStorage } from "../src/storage/local.js";
-import { verifyLocalSignature } from "../src/storage/sign.js";
+import { verifyProxySignature } from "../src/storage/sign.js";
 import { ProviderError } from "../src/types.js";
 import { ctx, runtime, tempDir } from "./helpers.js";
 
@@ -61,13 +61,13 @@ describe("local storage", () => {
   it("signs URLs that verify until they expire", async () => {
     const { p } = await make();
     const url = new URL(await p.getSignedUrl("a b.png", { expiresIn: 60 }));
-    expect(url.pathname).toMatch(/\/media\/s\/.+\/a%20b\.png$/);
+    expect(url.pathname).toMatch(/\/media\/s\/.+\/local\/a%20b\.png$/);
     const exp = Number(url.searchParams.get("exp"));
     const sig = url.searchParams.get("sig")!;
     const store = "0190a1b2-0000-7000-8000-000000000001";
-    expect(verifyLocalSignature(runtime.signingSecret, store, "a b.png", exp, sig)).toBe(true);
-    expect(verifyLocalSignature(runtime.signingSecret, store, "other.png", exp, sig)).toBe(false);
-    expect(verifyLocalSignature(runtime.signingSecret, store, "a b.png", exp, sig, (exp + 1) * 1000)).toBe(false);
-    expect(verifyLocalSignature(runtime.signingSecret, store, "a b.png", exp, "zz")).toBe(false);
+    expect(verifyProxySignature(runtime.signingSecret, store, "local", "a b.png", exp, sig)).toBe(true);
+    expect(verifyProxySignature(runtime.signingSecret, store, "local", "other.png", exp, sig)).toBe(false);
+    expect(verifyProxySignature(runtime.signingSecret, store, "local", "a b.png", exp, sig, (exp + 1) * 1000)).toBe(false);
+    expect(verifyProxySignature(runtime.signingSecret, store, "local", "a b.png", exp, "zz")).toBe(false);
   });
 });

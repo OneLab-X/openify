@@ -7,8 +7,8 @@ import { createWriteStream } from "node:fs";
 import { z } from "zod";
 import { errorMessage } from "../http.js";
 import type { ProviderContext, ProviderDefinition, StorageProvider } from "../types.js";
-import { hmacHex } from "./sign.js";
-import { assertSafeKey, encodeKey, PROBE_PREFIX } from "./keys.js";
+import { signProxyUrl } from "./sign.js";
+import { assertSafeKey, PROBE_PREFIX } from "./keys.js";
 
 /** Files on the server's data volume, served through the API's /media proxy. */
 const configSchema = z.object({
@@ -66,11 +66,8 @@ export function createLocalStorage(ctx: ProviderContext<LocalConfig, Record<stri
         return null;
       }
     },
-     
     async getSignedUrl(key, { expiresIn }) {
-      const exp = Math.floor(Date.now() / 1000) + expiresIn;
-      const sig = hmacHex(ctx.runtime.signingSecret, `${ctx.storeId}/${assertSafeKey(key)}:${exp}`);
-      return `${ctx.runtime.publicUrl}/media/s/${ctx.storeId}/${encodeKey(key)}?exp=${exp}&sig=${sig}`;
+      return signProxyUrl(ctx.runtime, ctx.storeId, "local", key, expiresIn);
     },
     publicUrl: () => null,
     async delete(key) {

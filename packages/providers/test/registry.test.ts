@@ -6,11 +6,12 @@ import { cod } from "../src/payments/cod.js";
 describe("ProviderRegistry", () => {
   const reg = createDefaultRegistry();
 
-  it("registers the phase-1 providers", () => {
+  it("registers the implemented providers", () => {
     expect(reg.definitions().map((d) => `${d.kind}:${d.id}`).sort()).toEqual([
       "analytics:ga4", "analytics:plausible", "email:resend", "email:smtp", "payment:cod", "payment:razorpay",
-      "storage:local", "storage:s3", "storage:s3-compatible",
+      "storage:azure-blob", "storage:b2", "storage:gcs", "storage:google-drive", "storage:local", "storage:r2", "storage:s3", "storage:s3-compatible",
     ]);
+    expect(reg.describe("storage").every((d) => d.status === "available")).toBe(true);
   });
 
   it("describes forms as JSON Schema generated from zod, with metadata", () => {

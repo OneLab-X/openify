@@ -129,6 +129,13 @@ export interface StoredObject {
   contentLength?: number;
 }
 
+export interface UploadTarget {
+  url: string;
+  method: "PUT";
+  /** Headers the browser must send with the PUT (they are part of the signature). */
+  headers: Record<string, string>;
+}
+
 export interface StorageProvider extends ProviderBase {
   put(key: string, body: Buffer | Readable, opts: PutOptions): Promise<void>;
   getSignedUrl(key: string, opts: { expiresIn: number }): Promise<string>;
@@ -138,6 +145,11 @@ export interface StorageProvider extends ProviderBase {
   get(key: string): Promise<StoredObject | null>;
   delete(key: string): Promise<void>;
   list(prefix: string): AsyncIterable<string>;
+  /**
+   * Presigned direct-to-storage upload, when the backend supports it (addition to SPEC §7; see
+   * DECISIONS.md). Without it, uploads go through the API.
+   */
+  createUploadUrl?(key: string, opts: { contentType: string; cacheControl?: string; expiresIn: number }): Promise<UploadTarget>;
 }
 
 // ── Email ───────────────────────────────────────────────────────────────────

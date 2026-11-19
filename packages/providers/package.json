@@ -4,9 +4,14 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
@@ -17,6 +22,9 @@
   "dependencies": {
     "@aws-sdk/client-s3": "3.1171.0",
     "@aws-sdk/s3-request-presigner": "3.1171.0",
+    "@azure/storage-blob": "12.34.0",
+    "@google-cloud/storage": "9.0.0",
+    "google-auth-library": "11.3.4",
     "nodemailer": "10.6.0",
     "zod": "4.6.7"
   },
