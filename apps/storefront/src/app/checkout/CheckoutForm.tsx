@@ -78,17 +78,25 @@ export function CheckoutForm({ checkoutId, shopName, locale, initialError }: { c
     // Load once; later changes go through save().
   }, []);
 
-  async function save(patch: Record<string, unknown>) {
-    if (!id) return null;
-    setError(null);
-    try {
-      const v = await sf<Checkout>("PATCH", `/checkouts/${id}`, patch);
-      absorb(v);
-      return v;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save");
-      return null;
-    }
+  // Saves run one after another so a slow earlier response never overwrites a newer one
+  // (e.g. the address blur and an applied gift card in quick succession).
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  function save(patch: Record<string, unknown>): Promise<Checkout | null> {
+    const run = async () => {
+      if (!id) return null;
+      setError(null);
+      try {
+        const v = await sf<Checkout>("PATCH", `/checkouts/${id}`, patch);
+        absorb(v);
+        return v;
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not save");
+        return null;
+      }
+    };
+    const next = queue.current.then(run, run);
+    queue.current = next;
+    return next;
   }
 
   const contactPatch = () => ({ email: email.trim() || null, phone: phone.trim() || null, marketingConsent: consent });

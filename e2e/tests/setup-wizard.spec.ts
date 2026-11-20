@@ -119,7 +119,8 @@ test("storefront shows the store name and logo", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Pretty Little Store", exact: true })).toBeVisible({ timeout: 2_000 });
   }).toPass({ timeout: 30_000 });
-  const logo = page.getByRole("img", { name: "Pretty Little Store logo" });
+  // The theme header's logo is the home link, so its alt text is the shop name.
+  const logo = page.getByRole("banner").getByRole("img", { name: "Pretty Little Store", exact: true });
   await expect(logo).toBeVisible();
   expect(await logo.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
 });

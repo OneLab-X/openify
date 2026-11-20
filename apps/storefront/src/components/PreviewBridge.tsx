@@ -3,7 +3,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 /**
- * Theme editor preview (Draft Mode only): the editor posts `sk:refresh` after saving a draft and
+ * Theme editor preview (preview cookie only): the editor posts `sk:refresh` after saving a draft and
  * `sk:select` to highlight a section. Messages are accepted from this origin only (the admin is
  * served from the same host under /admin).
  */

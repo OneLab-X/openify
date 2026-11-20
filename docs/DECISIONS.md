@@ -338,10 +338,12 @@ in setup (Settings → Branding) until the merchant sets them in the theme edito
 for contrast (black or white), and link/sale colours fall back to the text colour when they would fail WCAG AA
 on the background, so any brand colour stays accessible.
 
-**D-056 · Preview uses Next Draft Mode.** The editor gets a signed, 2-hour preview token from the API; the
-iframe opens `/preview?token…`, which verifies it, turns on Draft Mode (bypassing the data cache for that browser
-only) and stores the token in an httpOnly cookie. Theme reads then ask the API for the draft; other visitors keep
-the cached live theme. The editor posts `sk:refresh` / `sk:select` messages to the same-origin iframe.
+**D-056 · Preview by signed cookie.** The editor gets a signed, 2-hour preview token from the API; the iframe
+opens `/preview?token…`, which verifies it and stores it in an httpOnly cookie. Theme reads for that browser then
+ask the API for the draft, uncached (the API re-verifies the token); other visitors keep the cached live theme.
+Next's Draft Mode was tried first, but its bypass cookie was not kept through the redirect from a route handler
+behind the proxy, so refreshes lost the draft; every storefront page renders per request anyway, so the cookie is
+enough. The editor posts `sk:refresh` / `sk:select` messages to the same-origin iframe.
 
 **D-057 · CMS and redirects.** Pages, policy pages (`kind = 'policy'`, one per type, generated from templates
 filled with the store's details — marked as a starting point, not legal advice), blogs and articles; HTML is

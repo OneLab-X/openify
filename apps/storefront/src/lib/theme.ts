@@ -1,17 +1,16 @@
 import { globalSettings, type ThemeContext, type ThemeData, type ThemeImage, type ThemeProductCard } from "@shopkit/theme-default";
 import type { TemplateName } from "@shopkit/theme-sdk";
-import { cookies, draftMode } from "next/headers";
+import { cookies } from "next/headers";
 import { cache } from "react";
 import { content, getCollection, getProduct, getStore, listCollectionProducts, listProducts, type Media, type ProductCard } from "./index";
 
 export const PREVIEW_COOKIE = "sk_preview";
 
-/** The editor's preview token, only while Draft Mode is on (set by /preview). */
-export const previewToken = cache(async (): Promise<string | null> => {
-  const draft = await draftMode();
-  if (!draft.isEnabled) return null;
-  return (await cookies()).get(PREVIEW_COOKIE)?.value ?? null;
-});
+/**
+ * The editor's signed preview token (cookie set by /preview). Every page renders per request, and
+ * preview reads are uncached, so the draft never reaches other visitors; the API re-verifies it.
+ */
+export const previewToken = cache(async (): Promise<string | null> => (await cookies()).get(PREVIEW_COOKIE)?.value ?? null);
 
 /** Theme JSON for a template: live (cached under the `theme` tag) or the editor's draft. */
 export const getTheme = cache(async (template: TemplateName) => {
