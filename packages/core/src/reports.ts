@@ -1,4 +1,4 @@
-import { analyticsDaily, and, cartLines, checkouts, eq, gte, lte, orders, sql, type Executor } from "@shopkit/db";
+import { analyticsDaily, analyticsEvents, and, cartLines, checkouts, eq, gte, lte, orders, sql, type Executor } from "@shopkit/db";
 import { z } from "zod";
 import { getStore } from "./stores.js";
 
@@ -267,8 +267,8 @@ export async function reportCsv(db: Executor, storeId: string, query: z.input<ty
 // ── analytics_daily rollup (worker) ──────────────────────────────────────────
 /**
  * Recomputes the first-party columns of `analytics_daily` for one store day from the database:
- * add-to-carts (cart lines created), checkouts started, orders placed and revenue. Sessions and
- * page views come from the storefront tracker (Phase 5) and are left untouched.
+ * add-to-carts (cart lines created), checkouts started, orders placed and revenue, plus sessions
+ * and page views from the storefront's first-party events (Phase 5).
  */
 export async function rollupAnalyticsDay(db: Executor, storeId: string, day: string) {
   const { tz } = await tzOf(db, storeId);
@@ -279,7 +279,14 @@ export async function rollupAnalyticsDay(db: Executor, storeId: string, day: str
     .select({ n: sql<number>`count(*)::int`, revenue: sql<number>`coalesce(sum(${orders.total}), 0)::bigint` })
     .from(orders)
     .where(and(eq(orders.storeId, storeId), inDay(orders.placedAt)));
-  const values = { addToCarts: carts?.n ?? 0, checkoutsStarted: cos?.n ?? 0, orders: ord?.n ?? 0, revenue: Number(ord?.revenue ?? 0) };
+  const [fp] = await db
+    .select({
+      sessions: sql<number>`count(distinct ${analyticsEvents.sessionId})::int`,
+      pageViews: sql<number>`count(*) filter (where ${analyticsEvents.name} = 'page_view')::int`,
+    })
+    .from(analyticsEvents)
+    .where(and(eq(analyticsEvents.storeId, storeId), eq(analyticsEvents.day, day)));
+  const values = { sessions: fp?.sessions ?? 0, pageViews: fp?.pageViews ?? 0, addToCarts: carts?.n ?? 0, checkoutsStarted: cos?.n ?? 0, orders: ord?.n ?? 0, revenue: Number(ord?.revenue ?? 0) };
   await db
     .insert(analyticsDaily)
     .values({ storeId, day, ...values })

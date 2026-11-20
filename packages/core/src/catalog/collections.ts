@@ -1,3 +1,4 @@
+import { recordHandleChange } from "../content/redirects.js";
 import { and, asc, collectionProducts, collections, desc, eq, inArray, media, products, sql, type Executor } from "@shopkit/db";
 import { z } from "zod";
 import { writeAudit } from "../audit.js";
@@ -106,6 +107,7 @@ export async function saveCollection(tx: Executor, actor: Actor, storeId: string
   if (data.metafields) await replaceMetafields(tx, storeId, "collection", id, data.metafields);
 
   const previousHandle = existing && existing.handle !== handle ? existing.handle : null;
+  if (previousHandle) await recordHandleChange(tx, storeId, `/collections/${previousHandle}`, `/collections/${handle}`);
   await enqueueEvent(tx, { storeId, type: existing ? "collection.updated" : "collection.created", payload: { collectionId: id, handle, previousHandle } });
   await writeAudit(tx, actor, { storeId, action: existing ? "collection.updated" : "collection.created", resourceType: "collection", resourceId: id });
   return id;

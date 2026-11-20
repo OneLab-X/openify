@@ -27,6 +27,9 @@ export const OUTBOX_EVENT_TYPES = [
   "return.updated",
   "gift_card.issued",
   "staff.invited",
+  "theme.published",
+  "content.updated",
+  "redirect.updated",
 ] as const;
 export type OutboxEventType = (typeof OUTBOX_EVENT_TYPES)[number];
 

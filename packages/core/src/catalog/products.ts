@@ -1,3 +1,4 @@
+import { recordHandleChange } from "../content/redirects.js";
 import {
   and,
   asc,
@@ -290,6 +291,7 @@ export async function saveProduct(
 
   await refreshProducts(tx, storeId, [id]);
   const previousHandle = existing && existing.handle !== handle ? existing.handle : null;
+  if (previousHandle) await recordHandleChange(tx, storeId, `/products/${previousHandle}`, `/products/${handle}`);
   if (!opts.quiet) {
     await enqueueEvent(tx, { storeId, type: existing ? "product.updated" : "product.created", payload: { productId: id, handle, previousHandle } });
   }

@@ -2,6 +2,7 @@ import { and, eq, orders, roles, staffUsers } from "@shopkit/db";
 import type { CoreDeps } from "./deps.js";
 import type { EmailJob } from "./emails/deliver.js";
 import { merchantRecipients, type NotificationTemplate } from "./emails/notifications.js";
+import { enabledAnalyticsProviders } from "./content/analytics.js";
 import { getSetting } from "./settings.js";
 import type { OutboxEvent } from "./outbox.js";
 
@@ -55,6 +56,17 @@ async function merchantAlerts(deps: CoreDeps, event: OutboxEvent, template: "mer
   if (template === "merchant_new_order" ? !cfg.alertNewOrder : !cfg.alertPaidOrder) return [];
   const orderId = String(event.payload.orderId);
   return (await merchantRecipients(deps, event.storeId)).map((to) => email(event, template, to, { orderId }, `order:${orderId}:${template}:${to}`));
+}
+
+/** Server-side analytics (SPEC §12): one job per enabled provider so a failing one retries alone. */
+async function analyticsJobs(deps: CoreDeps, event: OutboxEvent, name: "purchase" | "refund"): Promise<RoutedJob[]> {
+  const providers = await enabledAnalyticsProviders(deps, event.storeId);
+  return providers.map((provider) => ({
+    queue: "analytics" as const,
+    name: "server-event",
+    data: { storeId: event.storeId, provider, event: name, orderId: event.payload.orderId, ...(event.payload.refundId ? { refundId: event.payload.refundId } : {}) },
+    jobId: `${event.id}-analytics-${provider}`,
+  }));
 }
 
 /** Fans an outbox event out to queue jobs (SPEC §13). Unknown events route nowhere. */
@@ -119,13 +131,19 @@ export async function routeOutboxEvent(deps: CoreDeps, event: OutboxEvent): Prom
     case "order.placed":
       return [...(await orderEmails(deps, event, "order_confirmation")), ...(await merchantAlerts(deps, event, "merchant_new_order"))];
     case "order.paid":
-      return merchantAlerts(deps, event, "merchant_order_paid");
+      return [...(await merchantAlerts(deps, event, "merchant_order_paid")), ...(await analyticsJobs(deps, event, "purchase"))];
     case "order.payment_failed":
       return orderEmails(deps, event, "payment_failed");
     case "order.cancelled":
       return event.payload.notify === false ? [] : orderEmails(deps, event, "order_cancelled");
     case "order.refunded":
-      return event.payload.notify === false ? [] : orderEmails(deps, event, "refund", `:${String(event.payload.refundId)}`);
+      return [...(event.payload.notify === false ? [] : await orderEmails(deps, event, "refund", `:${String(event.payload.refundId)}`)), ...(await analyticsJobs(deps, event, "refund"))];
+    case "theme.published":
+      return [revalidate(event, ["theme"])];
+    case "content.updated":
+      return [revalidate(event, ["content"])];
+    case "redirect.updated":
+      return [revalidate(event, ["redirects"])];
     case "order.shipping_updated":
       return orderEmails(deps, event, "shipping_update", `:${String(event.payload.eventId)}`);
     case "order.fulfillment_updated":

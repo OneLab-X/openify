@@ -53,3 +53,8 @@ export * from "./commerce/returns.js";
 export * from "./commerce/invoices.js";
 export * from "./pdf.js";
 export * from "./reports.js";
+export * from "./content/redirects.js";
+export * from "./content/pages.js";
+export * from "./content/menus.js";
+export * from "./content/themes.js";
+export * from "./content/analytics.js";

@@ -24,6 +24,8 @@
     "@shopkit/crypto": "workspace:*",
     "@shopkit/db": "workspace:*",
     "@shopkit/providers": "workspace:*",
+    "@shopkit/theme-default": "workspace:*",
+    "@shopkit/theme-sdk": "workspace:*",
     "@zxcvbn-ts/core": "4.3.0",
     "@zxcvbn-ts/language-common": "4.2.0",
     "@zxcvbn-ts/language-en": "4.1.2",
