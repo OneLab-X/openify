@@ -12,6 +12,8 @@ import {
   processMedia,
   routeOutboxEvent,
   rollupRecentAnalytics,
+  pruneAnalyticsEvents,
+  sendServerAnalyticsEvent,
   runJob,
   type CoreDeps,
   type Logger,
@@ -130,11 +132,18 @@ export function createRuntime(config: WorkerConfig, logger: Logger, env: Record<
       return { reminders, released };
     },
     // Repeatable: analytics_daily first-party columns for today and yesterday (dashboard funnel, SPEC §12).
+    // Server-side purchase/refund events, one job per provider (SPEC §12).
     analytics: async (job) => {
+      if (job.name === "server-event") {
+        const d = job.data as { storeId: string; provider: string; event: "purchase" | "refund"; orderId: string; refundId?: string };
+        return sendServerAnalyticsEvent(deps, d.storeId, d.provider, d.event, { orderId: d.orderId, ...(d.refundId ? { refundId: d.refundId } : {}) });
+      }
       if (job.name !== "rollup") return { status: "skipped", reason: `unknown analytics job ${job.name}` };
       const store = await getInstallStore(deps.db);
       if (!store || store.status !== "active") return { status: "skipped", reason: "no active store" };
-      return { status: "rolled_up", days: await rollupRecentAnalytics(deps.db, store.id) };
+      const days = await rollupRecentAnalytics(deps.db, store.id);
+      const pruned = await pruneAnalyticsEvents(deps.db, new Date());
+      return { status: "rolled_up", days, pruned };
     },
   };
   const concurrency: Partial<Record<QueueName, number>> = { images: config.IMAGE_CONCURRENCY, imports: 1, "media-migration": 1 };
