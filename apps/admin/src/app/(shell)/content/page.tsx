@@ -1,8 +1,5 @@
-import type { Metadata } from "next";
-import { ComingSoon } from "@/components/ComingSoon";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Content" };
-
-export default function Page() {
-  return <ComingSoon title="Content" phase={5} />;
+export default function ContentIndex() {
+  redirect("/content/theme");
 }

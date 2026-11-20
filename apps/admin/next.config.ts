@@ -10,7 +10,7 @@ const config: NextConfig = {
   outputFileTracingRoot: fileURLToPath(new URL("../../", import.meta.url)),
   poweredByHeader: false,
   reactStrictMode: true,
-  transpilePackages: ["@shopkit/ui", "@shopkit/sdk"],
+  transpilePackages: ["@shopkit/ui", "@shopkit/sdk", "@shopkit/theme-default", "@shopkit/theme-sdk"],
   // In production Caddy routes /api and /media to the API. In `next dev` without Caddy, proxy them.
   async rewrites() {
     if (!apiOrigin || process.env.NODE_ENV === "production") return [];
@@ -25,6 +25,7 @@ const config: NextConfig = {
         source: "/:path*",
         headers: [
           { key: "X-Frame-Options", value: "DENY" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "same-origin" },
         ],

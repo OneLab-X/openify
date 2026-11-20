@@ -47,6 +47,12 @@ importers:
       '@shopkit/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
+      '@shopkit/theme-default':
+        specifier: workspace:*
+        version: link:../../packages/themes/default
+      '@shopkit/theme-sdk':
+        specifier: workspace:*
+        version: link:../../packages/theme-sdk
       '@shopkit/ui':
         specifier: workspace:*
         version: link:../../packages/ui
