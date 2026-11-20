@@ -182,6 +182,8 @@ export interface ClientSnippet {
 export type ServerEventName = "purchase" | "refund" | "signup";
 export interface ServerEventPayload {
   clientId?: string;
+  /** Buyer email (Meta Conversions API matches on its SHA-256; never sent in clear). */
+  email?: string;
   url?: string;
   orderId?: string;
   value?: number;

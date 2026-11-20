@@ -8,7 +8,7 @@ describe("ProviderRegistry", () => {
 
   it("registers the implemented providers", () => {
     expect(reg.definitions().map((d) => `${d.kind}:${d.id}`).sort()).toEqual([
-      "analytics:ga4", "analytics:plausible", "email:resend", "email:smtp", "payment:bank-transfer", "payment:cashfree", "payment:cod", "payment:paypal", "payment:phonepe", "payment:razorpay", "payment:stripe", "shipping:delhivery", "shipping:easypost", "shipping:shiprocket",
+      "analytics:ga4", "analytics:matomo", "analytics:meta-pixel", "analytics:plausible", "analytics:posthog", "analytics:umami", "email:resend", "email:smtp", "payment:bank-transfer", "payment:cashfree", "payment:cod", "payment:paypal", "payment:phonepe", "payment:razorpay", "payment:stripe", "shipping:delhivery", "shipping:easypost", "shipping:shiprocket",
       "storage:azure-blob", "storage:b2", "storage:gcs", "storage:google-drive", "storage:local", "storage:r2", "storage:s3", "storage:s3-compatible",
     ]);
     expect(reg.describe("storage").every((d) => d.status === "available")).toBe(true);

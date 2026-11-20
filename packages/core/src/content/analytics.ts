@@ -104,6 +104,7 @@ export async function sendServerAnalyticsEvent(deps: CoreDeps, storeId: string, 
   await p.serverEvent(event, {
     // The order id doubles as the client id: purchases from the same order deduplicate.
     clientId: o.id,
+    ...(o.email ? { email: o.email } : {}),
     orderId: o.name ?? o.id,
     value: minor / 10 ** digits,
     currency: o.currency,

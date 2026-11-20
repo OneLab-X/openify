@@ -1,5 +1,9 @@
 import { ga4 } from "./analytics/ga4.js";
+import { matomo } from "./analytics/matomo.js";
+import { metaPixel } from "./analytics/meta-pixel.js";
 import { plausible } from "./analytics/plausible.js";
+import { posthog } from "./analytics/posthog.js";
+import { umami } from "./analytics/umami.js";
 import { resend } from "./email/resend.js";
 import { smtp } from "./email/smtp.js";
 import { bankTransfer } from "./payments/bank-transfer.js";
@@ -24,15 +28,11 @@ import type { ComingSoonProvider } from "./types.js";
 export const COMING_SOON: ComingSoonProvider[] = [
   { kind: "email", id: "ses", displayName: "Amazon SES" },
   { kind: "email", id: "postmark", displayName: "Postmark" },
-  { kind: "analytics", id: "umami", displayName: "Umami" },
-  { kind: "analytics", id: "matomo", displayName: "Matomo" },
-  { kind: "analytics", id: "posthog", displayName: "PostHog" },
-  { kind: "analytics", id: "meta-pixel", displayName: "Meta Pixel" },
 ];
 
 export function createDefaultRegistry(): ProviderRegistry {
   const registry = new ProviderRegistry();
-  for (const def of [localStorage, s3CompatibleStorage, s3Storage, r2Storage, gcsStorage, azureBlobStorage, b2Storage, googleDriveStorage, razorpay, stripe, paypal, cashfree, phonepe, cod, bankTransfer, smtp, resend, ga4, plausible, shiprocket, delhivery, easypost]) {
+  for (const def of [localStorage, s3CompatibleStorage, s3Storage, r2Storage, gcsStorage, azureBlobStorage, b2Storage, googleDriveStorage, razorpay, stripe, paypal, cashfree, phonepe, cod, bankTransfer, smtp, resend, ga4, plausible, umami, matomo, posthog, metaPixel, shiprocket, delhivery, easypost]) {
     registry.register(def);
   }
   for (const entry of COMING_SOON) registry.registerComingSoon(entry);
