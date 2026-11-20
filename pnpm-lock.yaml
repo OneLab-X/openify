@@ -519,6 +519,34 @@ importers:
         specifier: 5.1.1
         version: 5.1.1(@types/node@22.20.5)(@vitest/coverage-v8@5.1.1)(jsdom@31.0.1)(msw@3.0.7(@types/node@22.20.5)(typescript@6.0.3)(vite@8.3.8(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(vite@8.3.8(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
+  packages/themes/default:
+    dependencies:
+      '@shopkit/theme-sdk':
+        specifier: workspace:*
+        version: link:../../theme-sdk
+    devDependencies:
+      '@shopkit/config':
+        specifier: workspace:*
+        version: link:../../config
+      '@types/node':
+        specifier: 22.20.5
+        version: 22.20.5
+      '@types/react':
+        specifier: 19.3.0
+        version: 19.3.0
+      react:
+        specifier: 19.3.1
+        version: 19.3.1
+      react-dom:
+        specifier: 19.3.1
+        version: 19.3.1(react@19.3.1)
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 5.1.1
+        version: 5.1.1(@types/node@22.20.5)(@vitest/coverage-v8@5.1.1)(jsdom@31.0.1)(msw@3.0.7(@types/node@22.20.5)(typescript@6.0.3)(vite@8.3.8(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(vite@8.3.8(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+
   packages/ui:
     dependencies:
       class-variance-authority:

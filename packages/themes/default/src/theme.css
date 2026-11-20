@@ -1,0 +1,57 @@
+/*
+ * Default theme base styles. Colours, fonts, width and radius come from theme settings as CSS
+ * variables set on <body> by the storefront (see `themeStyle`). Utilities are Tailwind classes.
+ */
+.sk-theme {
+  background: var(--sk-bg);
+  color: var(--sk-fg);
+  font-family: var(--sk-font-body);
+  font-size: calc(1rem * var(--sk-font-scale, 1));
+}
+.sk-theme h1, .sk-theme h2, .sk-theme h3 { font-family: var(--sk-font-heading); letter-spacing: -0.01em; }
+.sk-container { margin-inline: auto; width: 100%; max-width: var(--sk-page-width, 1200px); padding-inline: 1rem; }
+@media (min-width: 768px) { .sk-container { padding-inline: 1.5rem; } }
+
+.sk-scheme-background { background: var(--sk-bg); color: var(--sk-fg); }
+.sk-scheme-muted { background: var(--sk-muted); color: var(--sk-fg); }
+.sk-scheme-accent { background: var(--sk-accent); color: var(--sk-accent-fg); }
+.sk-scheme-inverse { background: var(--sk-fg); color: var(--sk-bg); }
+.sk-scheme-accent .sk-button, .sk-scheme-inverse .sk-button { background: var(--sk-bg); color: var(--sk-fg); }
+
+.sk-button {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.625rem 1.25rem;
+  border-radius: var(--sk-radius); background: var(--sk-accent); color: var(--sk-accent-fg); font-weight: 600;
+  text-decoration: none; border: 2px solid transparent;
+}
+.sk-button:hover { filter: brightness(0.94); }
+.sk-button-outline { background: transparent; color: inherit; border-color: currentColor; }
+.sk-theme a:focus-visible, .sk-theme button:focus-visible, .sk-theme input:focus-visible, .sk-theme summary:focus-visible, .sk-theme select:focus-visible {
+  outline: 3px solid var(--sk-focus, #2563eb); outline-offset: 2px;
+}
+.sk-link { color: var(--sk-link); text-decoration: underline; text-underline-offset: 2px; }
+.sk-sale { color: var(--sk-sale); font-weight: 600; }
+.sk-rounded { border-radius: var(--sk-radius); }
+.sk-card-image { aspect-ratio: var(--sk-product-ratio, 1); overflow: hidden; border-radius: var(--sk-radius); background: var(--sk-muted); }
+.sk-skip { position: absolute; left: -999px; top: 0.5rem; z-index: 50; padding: 0.5rem 1rem; background: var(--sk-bg); color: var(--sk-fg); border-radius: var(--sk-radius); }
+.sk-skip:focus { left: 0.5rem; }
+.sk-input { min-height: 44px; border: 1px solid currentColor; border-radius: var(--sk-radius); padding: 0.5rem 0.75rem; background: var(--sk-bg); color: var(--sk-fg); }
+
+.sk-rte p { margin: 0.5em 0; }
+.sk-rte ul { list-style: disc; padding-left: 1.25rem; }
+.sk-rte ol { list-style: decimal; padding-left: 1.25rem; }
+.sk-rte h2 { font-size: 1.4em; font-weight: 600; margin: 0.8em 0 0.3em; }
+.sk-rte h3 { font-size: 1.2em; font-weight: 600; margin: 0.6em 0 0.3em; }
+.sk-rte a { text-decoration: underline; }
+.sk-rte blockquote { border-left: 3px solid currentColor; padding-left: 0.75rem; opacity: 0.85; }
+.sk-rte img { max-width: 100%; height: auto; }
+
+.sk-slides { display: grid; }
+.sk-slides > * { grid-area: 1 / 1; }
+.sk-slide[aria-hidden="true"] { visibility: hidden; opacity: 0; }
+.sk-slide { transition: opacity 400ms ease; }
+@media (prefers-reduced-motion: reduce) {
+  .sk-slide, .sk-theme * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+}
+.sk-sticky { position: sticky; top: 0; z-index: 40; }
+.sk-menu details > summary { list-style: none; cursor: pointer; }
+.sk-menu details > summary::-webkit-details-marker { display: none; }

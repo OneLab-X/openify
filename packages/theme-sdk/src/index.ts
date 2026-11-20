@@ -48,7 +48,7 @@ export interface RangeSetting extends Base {
 }
 export interface SelectSetting extends Base {
   type: "select";
-  options: { value: string; label: string }[];
+  options: readonly { value: string; label: string }[];
   default: string;
 }
 export interface ProductSetting extends Base {
