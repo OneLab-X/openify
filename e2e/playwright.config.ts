@@ -27,5 +27,7 @@ export default defineConfig({
     { name: "checkout", testMatch: /checkout\.spec\.ts/, dependencies: ["catalog"], use: { ...devices["Desktop Chrome"] } },
     // Phase 4: fulfilment, returns and gift cards on top of the checkout suite's orders.
     { name: "operations", testMatch: /operations\.spec\.ts/, dependencies: ["checkout"], use: { ...devices["Desktop Chrome"] } },
+    // Phase 5: theme editor, consent-gated analytics, SEO and CMS.
+    { name: "storefront", testMatch: /storefront\.spec\.ts/, dependencies: ["catalog"], use: { ...devices["Desktop Chrome"] } },
   ],
 });
