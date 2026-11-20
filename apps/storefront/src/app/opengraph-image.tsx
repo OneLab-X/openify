@@ -1,6 +1,9 @@
 import { ImageResponse } from "next/og";
 import { getStore } from "@/lib";
 
+/** Built from live data on each request (cached by the CDN headers), never at build time. */
+export const dynamic = "force-dynamic";
+
 export const alt = "Shop";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";

@@ -1,6 +1,9 @@
 import { content, getStore } from "@/lib";
 import { siteUrl } from "@/lib/seo";
 
+/** Built from live data on each request (cached by the CDN headers), never at build time. */
+export const dynamic = "force-dynamic";
+
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /** Sitemap index split by type (SPEC §11): /sitemaps/<type>-<n>.xml */
