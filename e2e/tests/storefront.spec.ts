@@ -49,8 +49,13 @@ test("rearrange home sections in the theme editor, preview the draft, publish, l
   const row = page.getByTestId("section-row-newsletter");
   await row.getByRole("button", { name: "Drag to reorder" }).focus();
   await page.keyboard.press("Space");
-  for (let i = 0; i < before.length; i++) await page.keyboard.press("ArrowUp");
+  // dnd-kit re-measures between moves: give each step a moment.
+  for (let i = 0; i < before.length + 2; i++) {
+    await page.keyboard.press("ArrowUp");
+    await page.waitForTimeout(150);
+  }
   await page.keyboard.press("Space");
+  await expect(page.locator("[data-testid^=section-row-]").first()).toHaveAttribute("data-testid", "section-row-newsletter");
   await expect(page.getByRole("status").filter({ hasText: "Draft saved" })).toBeVisible({ timeout: 10_000 });
 
   // The draft shows in the preview…
@@ -127,17 +132,28 @@ test("no third-party analytics request before consent; ecommerce events reach fi
 });
 
 test("SEO: Product JSON-LD, sitemap index, robots.txt and redirects for renamed handles", async ({ page, request }) => {
-  const handle = sql("select handle from products where status = 'active' order by created_at limit 1");
-  await page.goto(`/products/${handle}`);
+  await signIn(page);
+  const handle = "e2e-seo-candle";
+  const input = { title: "E2E SEO Candle", handle, status: "active", descriptionHtml: "<p>Soy wax, 40 hours.</p>", variants: [{ options: [], price: 49_900, sku: "SEO-1", inventory: [{ available: 5 }] }] };
+  const created = await admin(page, "POST", "/api/admin/products", input);
+  const id = String(created.id);
+
+  await expect(async () => {
+    await page.goto(`/products/${handle}`);
+    await expect(page.getByRole("heading", { name: "E2E SEO Candle", level: 1 })).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 20_000 });
   const ld = JSON.parse((await page.locator('script[type="application/ld+json"]').first().textContent())!) as { "@graph": Record<string, unknown>[] };
   const product = ld["@graph"].find((n) => n["@type"] === "Product")!;
-  expect(product).toMatchObject({ name: expect.any(String), offers: expect.objectContaining({}) });
-  const offers = product.offers as Record<string, unknown>;
-  const offer = (offers["@type"] === "AggregateOffer" ? (offers.offers as Record<string, unknown>[])[0] : offers)!;
-  expect(offer).toMatchObject({ "@type": "Offer", price: expect.stringMatching(/^\d+(\.\d+)?$/), priceCurrency: "INR", availability: expect.stringMatching(/^https:\/\/schema\.org\/(InStock|OutOfStock)$/) });
+  expect(product).toMatchObject({
+    name: "E2E SEO Candle",
+    sku: "SEO-1",
+    description: expect.stringContaining("Soy wax"),
+    brand: { "@type": "Brand" },
+    offers: { "@type": "Offer", price: "499.00", priceCurrency: "INR", availability: "https://schema.org/InStock", url: expect.stringMatching(new RegExp(`/products/${handle}$`)) },
+  });
   expect(ld["@graph"].some((n) => n["@type"] === "BreadcrumbList")).toBe(true);
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", new RegExp(`/products/${handle}$`));
-  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute("content", /.+/);
+  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute("content", /E2E SEO Candle/);
 
   const index = await (await request.get("/sitemap.xml")).text();
   expect(index).toContain("<sitemapindex");
@@ -147,20 +163,12 @@ test("SEO: Product JSON-LD, sitemap index, robots.txt and redirects for renamed 
   expect(robots).toMatch(/Sitemap: .*\/sitemap\.xml/);
   expect(robots).toMatch(/Disallow: \/checkout/);
 
-  await signIn(page);
-  const id = sql(`select id from products where handle = '${handle}'`);
-  const product0 = (await (await page.request.get(`/api/admin/products/${id}`)).json()) as Record<string, unknown>;
-  const renamed = `${handle}-renamed`;
-  const csrf = decodeURIComponent((await page.context().cookies()).find((c) => c.name === "sk_csrf")!.value);
-  const put = await page.request.put(`/api/admin/products/${id}`, { data: { ...product0, handle: renamed }, headers: { "x-csrf-token": csrf } });
-  expect(put.ok(), await put.text()).toBe(true);
+  await admin(page, "PUT", `/api/admin/products/${id}`, { ...input, handle: `${handle}-renamed` });
   await expect(async () => {
     const res = await request.get(`/products/${handle}`, { maxRedirects: 0 });
     expect(res.status()).toBe(308);
-    expect(res.headers().location).toMatch(new RegExp(`/products/${renamed}$`));
+    expect(res.headers().location).toMatch(new RegExp(`/products/${handle}-renamed$`));
   }).toPass({ timeout: 15_000 });
-  // Put the handle back for later suites (its redirect is removed automatically).
-  await page.request.put(`/api/admin/products/${id}`, { data: { ...product0, handle }, headers: { "x-csrf-token": csrf } });
 });
 
 test("CMS: a page and a generated policy render with the theme", async ({ page, request }) => {

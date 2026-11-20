@@ -6,7 +6,7 @@ import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { JsonLd } from "@/components/JsonLd";
 import { ThemeShell } from "@/components/ThemeShell";
 import { getProduct, getStore } from "@/lib";
-import { breadcrumbLd, graph, pageMetadata, productLd } from "@/lib/seo";
+import { breadcrumbLd, graph, pageMetadata, productLd, textFromHtml } from "@/lib/seo";
 import { ProductView } from "./ProductView";
 
 type Props = { params: Promise<{ handle: string }>; searchParams: Promise<{ variant?: string }> };
@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const image = product.images[0];
   return pageMetadata(store, {
     title: product.seo.title,
-    description: product.seo.description,
+    description: product.seo.description || textFromHtml(product.descriptionHtml),
     path: `/products/${product.handle}`,
     ...(image ? { image: { url: image.url, alt: image.alt ?? product.title, width: image.width, height: image.height } } : {}),
   });

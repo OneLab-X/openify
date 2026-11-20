@@ -20,6 +20,19 @@ export function clampText(text: string, max: number): string {
   return `${(space > max * 0.6 ? cut.slice(0, space) : cut).replace(/[\s,.;:–—-]+$/, "")}…`;
 }
 
+/** Plain text from sanitised HTML (descriptions for meta tags and JSON-LD). */
+export const textFromHtml = (html: string) =>
+  html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+
 export const siteUrl = (store: Store | null | undefined) => (store?.publicUrl ?? process.env.PUBLIC_URL ?? "http://localhost:3000").replace(/\/$/, "");
 export const absoluteUrl = (store: Store | null | undefined, path: string) => new URL(path, `${siteUrl(store)}/`).toString();
 
@@ -93,7 +106,7 @@ export interface Rating {
  */
 export function productLd(store: Store, p: StorefrontProduct, rating?: Rating | null): Ld {
   const url = absoluteUrl(store, `/products/${p.handle}`);
-  const description = p.seo.description ?? "";
+  const description = p.seo.description || textFromHtml(p.descriptionHtml).slice(0, 5000);
   const offers = p.variants.map((v) => ({
     "@type": "Offer",
     url: p.variants.length > 1 ? `${url}?variant=${v.id}` : url,
