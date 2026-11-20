@@ -8,7 +8,7 @@ const config: NextConfig = {
   outputFileTracingRoot: fileURLToPath(new URL("../../", import.meta.url)),
   poweredByHeader: false,
   reactStrictMode: true,
-  transpilePackages: ["@shopkit/ui", "@shopkit/sdk"],
+  transpilePackages: ["@shopkit/ui", "@shopkit/sdk", "@shopkit/theme-default", "@shopkit/theme-sdk"],
   async rewrites() {
     if (!apiOrigin || process.env.NODE_ENV === "production") return [];
     return [

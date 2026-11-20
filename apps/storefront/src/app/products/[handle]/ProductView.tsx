@@ -1,8 +1,9 @@
 "use client";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Picture } from "@/components/Picture";
-import { formatMoney, type StorefrontProduct } from "@/lib";
+import { currencyDigits, formatMoney, type StorefrontProduct } from "@/lib";
+import { track } from "@/lib/track";
 import { announceCart, sf, type Cart } from "@/lib/shop-client";
 
 /** Variant picker, gallery and add to cart. */
@@ -20,6 +21,12 @@ export function ProductView({ product, locale, initialVariantId }: { product: St
   const [adding, setAdding] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
+  const major = (minor: number) => minor / 10 ** currencyDigits(product.currency);
+  useEffect(() => {
+    track("view_item", { currency: product.currency, value: major(product.priceMin), items: [{ id: product.id, name: product.title, price: major(product.priceMin) }] });
+    // once per product page
+  }, [product.id]);
+
   async function addToCart() {
     if (!variant) return;
     setAdding(true);
@@ -27,6 +34,7 @@ export function ProductView({ product, locale, initialVariantId }: { product: St
     try {
       const cart = await sf<Cart>("POST", "/cart/lines", { lines: [{ variantId: variant.id, quantity }] });
       announceCart(cart);
+      track("add_to_cart", { currency: variant.currency, value: major(variant.price * quantity), items: [{ id: product.id, name: product.title, price: major(variant.price), quantity, variant: variant.title }] });
       setMessage({ ok: true, text: "Added to your cart" });
     } catch (err) {
       setMessage({ ok: false, text: err instanceof Error ? err.message : "Could not add to cart" });

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ThemeShell } from "@/components/ThemeShell";
 import Link from "next/link";
 import { connection } from "next/server";
 import { ProductGrid } from "@/components/ProductGrid";
@@ -13,7 +14,8 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const cursor = one(sp.cursor);
   const [{ store }, results] = await Promise.all([getStore(), q ? search(q, cursor) : Promise.resolve(null)]);
   return (
-    <main className="mx-auto grid max-w-6xl gap-6 px-4 py-8">
+    <ThemeShell template="search">
+    <div className="sk-container grid gap-6 py-8">
       <h1 className="text-2xl font-semibold">{q ? `Results for “${q}”` : "Search"}</h1>
       <form action="/search" role="search" className="flex gap-2">
         <label htmlFor="q" className="sr-only">Search products</label>
@@ -31,6 +33,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
           ) : null}
         </>
       ) : null}
-    </main>
+    </div>
+    </ThemeShell>
   );
 }

@@ -8,7 +8,6 @@ export function SlideshowSection({ id, settings, blocks, first }: SectionProps) 
   const slides = blocks.map((b, i) => {
     const image = img(b.settings.image);
     const center = str(b.settings.align) !== "left";
-    const H = first && i === 0 ? "h1" : "h2";
     return (
       <div key={b.id} className={`relative flex items-center overflow-hidden ${HEIGHT[str(settings.height)] ?? HEIGHT.medium} ${image ? "text-white" : "sk-scheme-muted"}`}>
         {image ? (
@@ -18,7 +17,7 @@ export function SlideshowSection({ id, settings, blocks, first }: SectionProps) 
           </>
         ) : null}
         <Container className={`relative grid gap-4 py-16 ${center ? "justify-items-center text-center" : ""}`}>
-          {str(b.settings.heading) ? <H className="max-w-3xl text-3xl font-semibold md:text-5xl">{str(b.settings.heading)}</H> : null}
+          {str(b.settings.heading) ? <h2 className="max-w-3xl text-3xl font-semibold md:text-5xl">{str(b.settings.heading)}</h2> : null}
           {str(b.settings.text) ? <p className="max-w-xl text-lg">{str(b.settings.text)}</p> : null}
           {str(b.settings.button_label) && str(b.settings.button_link) ? <ButtonLink href={str(b.settings.button_link)} label={str(b.settings.button_label)} /> : null}
         </Container>

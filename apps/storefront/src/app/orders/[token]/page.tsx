@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OrderDetails } from "@/components/OrderDetails";
+import { PurchaseTracker } from "@/components/PurchaseTracker";
 import { ReturnRequest } from "@/components/ReturnRequest";
-import { getOrderStatus, getStore } from "@/lib";
+import { currencyDigits, getOrderStatus, getStore } from "@/lib";
 
 export const metadata: Metadata = { title: "Your order", robots: { index: false, follow: false } };
 
@@ -17,7 +18,16 @@ export default async function OrderStatusPage({ params, searchParams }: { params
   const [order, { store }] = await Promise.all([getOrderStatus(token), getStore()]);
   if (!order) notFound();
   return (
-    <main className="mx-auto max-w-3xl px-4 py-10">
+    <main className="sk-container max-w-3xl py-10">
+      {isNew && order.placed ? (
+        <PurchaseTracker
+          orderId={order.id}
+          name={order.name ?? order.id}
+          value={order.total / 10 ** currencyDigits(order.currency)}
+          currency={order.currency}
+          items={order.lines.map((l) => ({ id: l.productId ?? l.id, name: l.title, price: l.unitPrice / 10 ** currencyDigits(order.currency), quantity: l.quantity }))}
+        />
+      ) : null}
       {isNew && order.placed ? (
         <div className="mb-8 grid gap-2">
           <p className="text-sm uppercase tracking-wide text-muted-foreground">Order {order.name}</p>

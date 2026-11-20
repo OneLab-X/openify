@@ -51,6 +51,7 @@ export function ThemePage({ ctx, layout, template }: { ctx: ThemeContext; layout
       </a>
       <div data-section-group="header">{render(head, ctx, false)}</div>
       <main id="main" tabIndex={-1} className="flex-1 focus:outline-none">
+        {ctx.template === "index" ? <h1 className="sr-only">{ctx.store.name}</h1> : null}
         {render(resolveTemplate(THEME, template), ctx, true)}
       </main>
       <div data-section-group="footer">{render(foot, ctx, false)}</div>

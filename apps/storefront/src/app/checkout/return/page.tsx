@@ -8,7 +8,7 @@ export default async function ReturnPage({ searchParams }: { searchParams: Promi
   const raw = await searchParams;
   const params = Object.fromEntries(Object.entries(raw).flatMap(([k, v]) => (typeof v === "string" ? [[k, v]] : [])));
   return (
-    <main className="mx-auto max-w-xl px-4 py-16 text-center">
+    <main className="sk-container max-w-xl py-16 text-center">
       <ReturnVerifier params={params} />
     </main>
   );

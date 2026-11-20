@@ -23,6 +23,54 @@ function api(tags: string[]) {
   });
 }
 
+/** SDK client for content reads: tagged cache, or `null` tags for uncached (preview) reads. */
+export function content(tags: string[] | null) {
+  if (tags) return api(tags);
+  const secret = process.env.REVALIDATE_SECRET;
+  return createShopkitClient({
+    baseUrl: apiOrigin(),
+    ...(secret ? { headers: { "x-shopkit-internal": secret } } : {}),
+    fetch: (req) => fetch(req, { cache: "no-store" }),
+  });
+}
+
+export async function getPage(handle: string, kind: "page" | "policy") {
+  const c = content(["content"]);
+  const { data } = kind === "page" ? await c.GET("/api/storefront/pages/{handle}", { params: { path: { handle } } }) : await c.GET("/api/storefront/policies/{handle}", { params: { path: { handle } } });
+  return data ?? null;
+}
+
+export async function getBlog(handle: string, page = 1, tag?: string) {
+  const { data } = await content(["content"]).GET("/api/storefront/blogs/{handle}", { params: { path: { handle }, query: { page, ...(tag ? { tag } : {}) } } });
+  return data ?? null;
+}
+
+export async function getArticle(blog: string, handle: string) {
+  const { data } = await content(["content"]).GET("/api/storefront/blogs/{blog}/articles/{handle}", { params: { path: { blog, handle } } });
+  return data ?? null;
+}
+
+export async function findRedirect(path: string) {
+  const { data } = await content(["redirects"]).GET("/api/storefront/redirect", { params: { query: { path } } });
+  return data?.to ?? null;
+}
+
+/** Analytics snippets: credential changes are not outbox events, so this refreshes every 5 minutes. */
+export async function getAnalyticsConfig() {
+  try {
+    const secret = process.env.REVALIDATE_SECRET;
+    const client = createShopkitClient({
+      baseUrl: apiOrigin(),
+      ...(secret ? { headers: { "x-shopkit-internal": secret } } : {}),
+      fetch: (req) => fetch(req, { cache: "force-cache", next: { revalidate: 300, tags: ["analytics", "store"] } }),
+    });
+    const { data } = await client.GET("/api/storefront/analytics");
+    return data ?? { consentBanner: true, providers: [] };
+  } catch {
+    return { consentBanner: true, providers: [] };
+  }
+}
+
 /** Store identity for the shell (`store` tag). */
 export async function getStore(): Promise<StorefrontStore> {
   try {

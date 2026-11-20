@@ -19,6 +19,7 @@ export function Picture({ media, alt, sizes, className, priority = false }: { me
         width={media.width ?? undefined}
         height={media.height ?? undefined}
         loading={priority ? "eager" : "lazy"}
+        fetchPriority={priority ? "high" : undefined}
         decoding="async"
         className={className}
       />

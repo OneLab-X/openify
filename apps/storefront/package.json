@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@shopkit/sdk": "workspace:*",
+    "@shopkit/theme-default": "workspace:*",
+    "@shopkit/theme-sdk": "workspace:*",
     "@shopkit/ui": "workspace:*",
     "next": "16.4.6",
     "react": "19.3.1",

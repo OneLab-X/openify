@@ -2,7 +2,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { formatMoney } from "@/lib";
+import { currencyDigits, formatMoney } from "@/lib";
+import { track } from "@/lib/track";
 import { sf, type Checkout, type MailingAddress, type PaymentSession, type VerifyResult } from "@/lib/shop-client";
 import { mountStripe, openCashfree, openRazorpay } from "./widgets";
 
@@ -59,6 +60,10 @@ export function CheckoutForm({ checkoutId, shopName, locale, initialError }: { c
         const v = await sf<Checkout>("GET", `/checkouts/${cid}`);
         if (!alive) return;
         absorb(v);
+        if (v.status !== "completed") {
+          const d = 10 ** currencyDigits(v.currency);
+          track("begin_checkout", { currency: v.currency, value: v.total / d, items: v.lines.map((l) => ({ id: l.productId, name: l.title, price: l.unitPrice / d, quantity: l.quantity })) });
+        }
         setEmail(v.email ?? "");
         setPhone(v.phone ?? "");
         setConsent(v.marketingConsent);

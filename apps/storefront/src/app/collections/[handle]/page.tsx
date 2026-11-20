@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
+import { ThemeShell } from "@/components/ThemeShell";
+import { JsonLd } from "@/components/JsonLd";
+import { collectionLd, breadcrumbLd, graph, pageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { notFoundOrRedirect } from "@/lib/not-found";
 import { connection } from "next/server";
 import { ProductGrid } from "@/components/ProductGrid";
 import { currencyDigits, getCollection, getFacets, getStore, listCollectionProducts, many, one, type ListQuery } from "@/lib";
@@ -19,10 +23,18 @@ const SORTS = [
   ["created_asc", "Oldest"],
 ] as const;
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const c = await getCollection((await params).handle);
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
+  const [c, { store }, sp] = await Promise.all([getCollection((await params).handle), getStore(), searchParams]);
   if (!c) return {};
-  return { title: c.seo.title, ...(c.seo.description ? { description: c.seo.description } : {}), alternates: { canonical: `/collections/${c.handle}` } };
+  // Filtered/sorted/paged variants canonicalise to the plain collection URL and are not indexed.
+  const filtered = Object.keys(sp).length > 0;
+  return pageMetadata(store, {
+    title: c.seo.title,
+    description: c.seo.description,
+    path: `/collections/${c.handle}`,
+    ...(c.image ? { image: { url: c.image.url, alt: c.image.alt ?? c.title, width: c.image.width, height: c.image.height } } : {}),
+    noindex: filtered,
+  });
 }
 
 /** Collection page with GET-form filters (works without JavaScript) and cursor "load more". */
@@ -30,7 +42,8 @@ export default async function CollectionPage({ params, searchParams }: Props) {
   await connection();
   const [{ handle }, sp] = await Promise.all([params, searchParams]);
   const [collection, { store }] = await Promise.all([getCollection(handle), getStore()]);
-  if (!collection || !store) notFound();
+  if (!store) notFound();
+  if (!collection) return notFoundOrRedirect(`/collections/${handle}`);
   const digits = currencyDigits(store.currency ?? "USD");
   const toMinor = (v: string | undefined) => (v && /^\d+(\.\d+)?$/.test(v) ? Math.round(Number(v) * 10 ** digits) : undefined);
   const sort = SORTS.find(([k]) => k === one(sp.sort))?.[0];
@@ -53,7 +66,9 @@ export default async function CollectionPage({ params, searchParams }: Props) {
   if (page.nextCursor) nextParams.set("cursor", page.nextCursor);
 
   return (
-    <main className="mx-auto grid max-w-6xl gap-6 px-4 py-8">
+    <ThemeShell template="collection">
+      <JsonLd data={graph(collectionLd(store, { title: collection.title, handle: collection.handle, description: collection.seo.description }, page.items), breadcrumbLd(store, [{ name: "Home", path: "/" }, { name: "Collections", path: "/collections" }, { name: collection.title, path: `/collections/${collection.handle}` }]))} />
+    <div className="sk-container grid gap-6 py-8">
       <header className="grid gap-2">
         <h1 className="text-3xl font-semibold">{collection.title}</h1>
         {/* Sanitised by the API with DOMPurify. */}
@@ -111,6 +126,7 @@ export default async function CollectionPage({ params, searchParams }: Props) {
           ) : null}
         </div>
       </div>
-    </main>
+    </div>
+    </ThemeShell>
   );
 }
