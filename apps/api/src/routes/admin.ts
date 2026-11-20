@@ -137,9 +137,12 @@ export const adminRoutes: FastifyPluginAsyncZod<{ deps: AppDeps }> = async (app,
       onRequest: requireStaff(deps),
       schema: { tags, operationId: "saveCredential", params: credentialParams, body: credentialBody, response: { 200: credentialSummary, ...errorResponses } },
     },
-    (req) => {
+    async (req) => {
       assertCan(req.staff!.permissions, KIND_PERMISSION[req.params.kind]);
-      return upsertCredential(deps, actorOf(req), { storeId: req.staff!.storeId, ...req.params }, req.body);
+      const saved = await upsertCredential(deps, actorOf(req), { storeId: req.staff!.storeId, ...req.params }, req.body);
+      // Analytics snippets are rendered by the storefront: refresh its cached config.
+      if (req.params.kind === "analytics") await enqueueEvent(deps.db, { storeId: req.staff!.storeId, type: "store.updated" });
+      return saved;
     },
   );
 
@@ -169,6 +172,7 @@ export const adminRoutes: FastifyPluginAsyncZod<{ deps: AppDeps }> = async (app,
         throw new AppError("conflict", "Choose another storage provider before removing the active one");
       }
       await deleteCredential(deps, actorOf(req), { storeId, ...req.params });
+      if (req.params.kind === "analytics") await enqueueEvent(deps.db, { storeId, type: "store.updated" });
       return { ok: true as const };
     },
   );
@@ -223,6 +227,7 @@ export const adminRoutes: FastifyPluginAsyncZod<{ deps: AppDeps }> = async (app,
       }
       await deps.db.transaction(async (tx) => {
         await setSetting(tx, storeId, key, value as never);
+        if (key === "analytics.consentBanner") await enqueueEvent(tx, { storeId, type: "store.updated" });
         await writeAudit(tx, actorOf(req), { storeId, action: "settings.updated", resourceType: "setting", resourceId: key });
       });
       return { ok: true as const };
