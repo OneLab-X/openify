@@ -8,5 +8,5 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 RUN pnpm fetch
 COPY . .
 RUN pnpm install --offline --frozen-lockfile \
- && pnpm turbo run build --filter="./packages/*"
+ && pnpm turbo run build --filter="./packages/*" --filter="./packages/themes/*"
 CMD ["pnpm", "turbo", "run", "dev", "--concurrency=20"]
