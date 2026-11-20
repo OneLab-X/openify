@@ -2,7 +2,35 @@
 
 All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased] — Phase 4: merchant operations
+## [Unreleased] — Phase 5: storefront, themes, CMS, SEO, analytics
+
+### Added
+- `packages/theme-sdk`: section/block/setting schema types (text, textarea, richtext, image, colour, font, range,
+  select, product, collection, menu, url, boolean), template JSON schema, normalising and setting readers.
+- `packages/themes/default`: home, collection, product, cart, search, page, blog, article, account and 404
+  templates; header, announcement bar, slideshow, featured collection, featured product, image with text, rich
+  text, testimonials, newsletter and footer sections. Mobile-first, keyboard and screen-reader friendly, reduced
+  motion respected, contrast-safe colours from any brand colour.
+- Schema: pages, blogs, articles, menus, menu items, redirects, themes, theme templates/settings/versions,
+  analytics events.
+- Admin: theme editor (template picker, drag-and-drop sections and blocks, settings forms from the schema, live
+  draft preview in an iframe, desktop/mobile preview, publish, version history and rollback); pages and policy
+  pages with generator templates; blogs and posts; nested navigation menus; URL redirects.
+- Storefront: every page rendered through the theme; CMS pages, policies, blogs; draft preview; redirects for
+  renamed handles; SEO metadata, canonical URLs, JSON-LD (Organization, WebSite + SearchAction, Product + Offer,
+  BreadcrumbList, CollectionPage, BlogPosting); sitemap index split by type; robots.txt; Open Graph image;
+  cookie consent banner; ecommerce events; first-party analytics; newsletter signup.
+- Analytics adapters: Umami, Matomo, PostHog, Meta Pixel (with Conversions API). Worker sends server-side
+  purchase/refund events to every provider that supports them.
+- Automatic redirects when a product, collection, page, blog or article handle changes.
+- e2e `storefront` project (theme publish without rebuild, no third-party request before consent, SEO, CMS) and
+  `pnpm --filter @shopkit/e2e lighthouse` (mobile performance, accessibility and SEO ≥ 90).
+
+### Changed
+- The storefront home page, header and footer come from the theme (the Phase 2 basic home is gone).
+- `GET /api/storefront/store` also returns the public URL, email, phone and address (for Organization data).
+
+## Phase 4: merchant operations
 
 ### Added
 - Schema: fulfillments and lines, shipping zones/countries/rates, carrier and shipping webhook events, returns and

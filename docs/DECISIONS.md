@@ -311,3 +311,67 @@ enrolment screen. Changing someone's role or disabling them ends their sessions.
 - Selling gift cards to a different recipient from the storefront product page (the `Recipient email` line
   attribute works through the API).
 - Order editing after placement and multi-currency (as in D-042).
+
+## Phase 5 — storefront, themes, CMS, SEO, analytics
+
+**D-052 · Theme data model.** SPEC §8 names `themes`, `theme_templates` and `theme_settings`; each template and
+the global settings row hold a `draft` and a `published` JSON column, and a fourth table, `theme_versions`,
+snapshots every template + settings at each publish. Publishing copies drafts to live in one transaction, bumps
+`themes.published_version` and writes an outbox `theme.published` event that revalidates the storefront's `theme`
+cache tag — no rebuild or restart. Rollback republishes an old snapshot as a new version, so history is never
+rewritten. The editor autosaves drafts; the live shop changes only on Publish.
+
+**D-053 · Theme packages.** `packages/theme-sdk` (framework-free: setting types, template JSON zod schema,
+`readSettings`, `normalizeTemplate`, `resolveTemplate`) and `packages/themes/default` (schema module without React
+for the API/admin, server section components, two client components) are built to `dist` like `@shopkit/ui`, so the
+API (NodeNext) can import `@shopkit/theme-default/schema` to validate drafts. Sections get data through a
+`ThemeData` interface the storefront implements; the theme never calls the API. Every non-layout template has one
+`main-*` section that renders the page's own content (product form, cart, account), keeping commerce logic in the
+storefront. The announcement bar, header and footer are sections of a `layout` template (header and footer groups).
+
+**D-054 · Fonts are system stacks.** The `font` setting chooses among six system font stacks (sans, humanist,
+geometric, two serifs, mono). Web fonts would cost a render-blocking request per visit (Lighthouse mobile ≥ 90)
+and a third-party request before consent. Self-hosted font files can be added later as another option.
+
+**D-055 · Branding feeds theme settings.** The theme's accent colour and logo fall back to the store brand set
+in setup (Settings → Branding) until the merchant sets them in the theme editor. Button text colour is chosen
+for contrast (black or white), and link/sale colours fall back to the text colour when they would fail WCAG AA
+on the background, so any brand colour stays accessible.
+
+**D-056 · Preview uses Next Draft Mode.** The editor gets a signed, 2-hour preview token from the API; the
+iframe opens `/preview?token…`, which verifies it, turns on Draft Mode (bypassing the data cache for that browser
+only) and stores the token in an httpOnly cookie. Theme reads then ask the API for the draft; other visitors keep
+the cached live theme. The editor posts `sk:refresh` / `sk:select` messages to the same-origin iframe.
+
+**D-057 · CMS and redirects.** Pages, policy pages (`kind = 'policy'`, one per type, generated from templates
+filled with the store's details — marked as a starting point, not legal advice), blogs and articles; HTML is
+sanitised with the Phase 2 DOMPurify allow-list on write and on output. Menus nest three levels; items reference
+resources by id so renames never break links, and links to unpublished/deleted resources are dropped. Changing a
+product, collection, page, blog or article handle inserts an automatic redirect and re-points older redirects (no
+chains); changing it back removes the redirect. The storefront follows redirects (308) for missing resources and
+in a catch-all route.
+
+**D-058 · SEO.** Per-page title/description/canonical/Open Graph/Twitter metadata (ported from PLS `seo.ts`);
+one JSON-LD `@graph` per page: Organization + WebSite with SearchAction (home), Product with an Offer per variant
+or AggregateOffer + BreadcrumbList (product), CollectionPage + BreadcrumbList, BlogPosting. `productLd` takes an
+optional rating so AggregateRating appears once reviews exist (Google rejects invented ratings). Sitemap index at
+`/sitemap.xml` with per-type sitemaps (`/sitemaps/<type>-<n>.xml`, 5,000 URLs each); filtered/sorted collection
+URLs are `noindex` and canonicalise to the plain URL. A default Open Graph image is generated with `next/og`.
+
+**D-059 · Analytics and consent.** The storefront renders each enabled provider's `clientSnippet` client-side:
+snippets that `requiresConsent` are injected only after "Accept" (stored in `localStorage`); with the banner turned
+off, consent-requiring providers are not rendered at all. Umami, Plausible and cookieless Matomo need no consent.
+Ecommerce events (`view_item`, `add_to_cart`, `begin_checkout`, `purchase`) go to whichever trackers are loaded and
+to the first-party collector (`POST /api/storefront/events`: no cookies, no IP stored, a random per-tab session
+id), which the worker rolls into `analytics_daily` sessions/page views and prunes after 90 days. The worker sends
+server-side purchase/refund events, one job per provider so a failing provider retries alone; Meta's Conversions
+API receives only a SHA-256 of the buyer email. New adapters: Umami, Matomo, PostHog, Meta Pixel.
+
+**D-060 · Deferred within Phase 5.**
+- A Content-Security-Policy with nonces on the storefront (SPEC §10): analytics snippets are inline scripts; the
+  nonce plumbing through Next and the providers is a Phase 6 hardening item.
+- Product reviews (AggregateRating stays empty until a review source exists); per-product Open Graph images
+  generated with `next/og` (product photos are used instead).
+- Multiple installed themes / theme upload; section groups beyond header and footer; per-template alternates
+  (`templateSuffix` is stored on pages but not yet selectable).
+- Self-hosted web fonts (D-054).

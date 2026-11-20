@@ -106,6 +106,28 @@ once and the confirmation email went once, then refunds through the provider.
   `http://127.0.0.1:18025`.
 - e2e: the `operations` project depends on `checkout` (it fulfils and returns that suite's Razorpay order).
 
+## Themes, SEO and analytics (Phase 5)
+
+- A theme is a package like `packages/themes/default`: `src/schema.ts` (settings, sections, default templates — no
+  React) and section components registered in `SECTION_COMPONENTS`. Add a section by adding its schema entry and
+  component; the editor form is generated from the schema. Run `pnpm --filter @shopkit/theme-default test` to check
+  every default template still validates.
+- Theme editor preview: `/preview?token=…&path=/` (Draft Mode). It needs the admin and storefront on the same origin,
+  as Caddy serves them; with plain `pnpm dev` (admin :3001, storefront :3000) the preview loads but live refresh
+  messages do not cross origins — reload the iframe.
+- **Google Rich Results Test for a product page:** the test must reach the page, so use a public URL (a staging
+  domain, or `cloudflared tunnel --url https://localhost:8443` / `ngrok http https://localhost:8443`). Open
+  <https://search.google.com/test/rich-results>, enter `https://<host>/products/<handle>`, run it and check that
+  "Product snippets" and "Breadcrumbs" are detected with no errors (warnings about reviews, shipping details or return
+  policy are optional fields). Without a public URL: open the product page, copy the
+  `<script type="application/ld+json">` contents and use the "Code" tab of the same tool, or
+  <https://validator.schema.org>. The e2e `storefront` suite checks the Product/Offer fields offline.
+- Lighthouse gate: start the stack, then `E2E_BASE_URL=https://localhost:8443 pnpm --filter @shopkit/e2e lighthouse`
+  (reports in `e2e/lighthouse-report/`). It audits `/`, the first collection and the first product from the
+  sitemaps; `LH_PATHS=/,/collections/x,/products/y` picks pages.
+- Analytics: snippets that need consent load only after "Accept" in the banner (`localStorage.sk_consent`); clear
+  that key to see the banner again. First-party events land in `analytics_events` and roll up every 15 minutes.
+
 ## API, SDK and OpenAPI
 
 Routes declare zod schemas; OpenAPI is generated from them. After changing a route:
