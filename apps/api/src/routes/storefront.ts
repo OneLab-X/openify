@@ -47,7 +47,19 @@ export const storefrontRoutes: FastifyPluginAsyncZod<{ deps: AppDeps }> = async 
       const view = await storeView(deps, store);
       return {
         setupRequired: false,
-        store: { name: view.name, logoUrl: view.logoUrl, faviconUrl: view.faviconUrl, brand: view.brand, currency: view.currency, locale: view.locale },
+        store: {
+          name: view.name,
+          logoUrl: view.logoUrl,
+          faviconUrl: view.faviconUrl,
+          brand: view.brand,
+          currency: view.currency,
+          locale: view.locale,
+          publicUrl: view.publicUrl,
+          email: view.email,
+          phone: view.phone,
+          country: view.country,
+          address: view.address,
+        },
       };
     },
   );

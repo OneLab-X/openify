@@ -58,3 +58,4 @@ export * from "./content/pages.js";
 export * from "./content/menus.js";
 export * from "./content/themes.js";
 export * from "./content/analytics.js";
+export * from "./content/sitemap.js";

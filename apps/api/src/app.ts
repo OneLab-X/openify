@@ -21,6 +21,7 @@ import { storefrontCommerceRoutes } from "./routes/storefront-commerce.js";
 import { webhookRoutes } from "./routes/webhooks.js";
 import { commerceRoutes } from "./routes/commerce.js";
 import { inviteRoutes, operationsRoutes } from "./routes/operations.js";
+import { contentAdminRoutes, contentStorefrontRoutes } from "./routes/content.js";
 
 export interface BuildOptions {
   logger?: FastifyBaseLogger;
@@ -77,6 +78,8 @@ export async function buildApp(deps: AppDeps, config: Config, opts: BuildOptions
   await app.register(commerceRoutes, { prefix: "/api/admin", deps });
   await app.register(operationsRoutes, { prefix: "/api/admin", deps });
   await app.register(inviteRoutes, { prefix: "/api/admin/auth", deps });
+  await app.register(contentAdminRoutes, { prefix: "/api/admin", deps });
+  await app.register(contentStorefrontRoutes, { prefix: "/api/storefront", deps });
   await app.register(storefrontRoutes, { prefix: "/api/storefront", deps });
   await app.register(storefrontCommerceRoutes, { prefix: "/api/storefront", deps, config });
   await app.register(webhookRoutes, { prefix: "/api/webhooks", deps });

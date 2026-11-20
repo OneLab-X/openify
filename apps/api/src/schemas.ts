@@ -189,6 +189,11 @@ export const storefrontStore = z
         brand: z.object({ primaryColor: z.string().optional(), accentColor: z.string().optional() }),
         currency: z.string().nullable(),
         locale: z.string().nullable(),
+        publicUrl: z.string().nullable(),
+        email: z.string().nullable(),
+        phone: z.string().nullable(),
+        country: z.string().nullable(),
+        address: z.object({ line1: z.string().optional(), line2: z.string().optional(), city: z.string().optional(), province: z.string().optional(), postalCode: z.string().optional(), country: z.string().optional() }),
       })
       .nullable(),
   })

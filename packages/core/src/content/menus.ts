@@ -27,18 +27,20 @@ export interface MenuItemInput {
   items?: MenuItemInput[];
 }
 
-const itemSchema: z.ZodType<MenuItemInput> = z.lazy(() =>
-  z
-    .object({
-      title: z.string().trim().min(1).max(120),
-      kind: z.enum(MENU_ITEM_KINDS),
-      resourceId: z.uuid().nullish(),
-      url: linkUrl.nullish(),
-      items: z.array(itemSchema).max(50).optional(),
-    })
+const itemBase = z.object({
+  title: z.string().trim().min(1).max(120),
+  kind: z.enum(MENU_ITEM_KINDS),
+  resourceId: z.uuid().nullish(),
+  url: linkUrl.nullish(),
+});
+const checks = <T extends z.ZodType<{ kind: MenuItemKind; url?: string | null | undefined; resourceId?: string | null | undefined }>>(schema: T) =>
+  schema
     .refine((i) => i.kind !== "url" || !!i.url, { message: "Enter a link", path: ["url"] })
-    .refine((i) => ["home", "search", "collections", "url"].includes(i.kind) || !!i.resourceId, { message: "Choose what to link to", path: ["resourceId"] }),
-);
+    .refine((i) => ["home", "search", "collections", "url"].includes(i.kind) || !!i.resourceId, { message: "Choose what to link to", path: ["resourceId"] });
+// Three explicit levels (no recursive schema): deeper nesting is refused by validation.
+const level3 = checks(itemBase.extend({ items: z.array(z.never(), { error: "Menus can be nested three levels deep" }).max(0, "Menus can be nested three levels deep").optional() }));
+const level2 = checks(itemBase.extend({ items: z.array(level3).max(50).optional() }));
+const itemSchema = checks(itemBase.extend({ items: z.array(level2).max(50).optional() }));
 
 export const menuInput = z.object({
   title: z.string().trim().min(1).max(120),
